@@ -284,7 +284,7 @@ Tasks are ordered by priority. Claude Code should work top to bottom, marking it
 
 - [x] **BL-01** Scaffold React + TypeScript frontend running in Docker (Vite, basic routing, empty pages for Planning and Standup views)
 - [x] **BL-02** Scaffold Node.js + Express backend running in Docker with a `/health` endpoint
-- [ ] **BL-03** Set up PostgreSQL in Docker Compose; confirm all three services start with `docker compose up`
+- [x] **BL-03** Set up PostgreSQL in Docker Compose; confirm all three services start with `docker compose up`
 - [ ] **BL-04** Implement full database schema (projects, phases, tasks, day_profiles, users, workspaces) per the data model in this spec
 - [ ] **BL-05** Seed the database with realistic dummy data (2–3 projects, each with 2–3 phases and 3–5 tasks) for UI development
 
