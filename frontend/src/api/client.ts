@@ -1,4 +1,4 @@
-import type { Project, Phase, Task, DayProfile } from '../types';
+import type { Project, Phase, Task, DayProfile, LoadEntry } from '../types';
 
 const BASE = '/api';
 
@@ -61,6 +61,14 @@ export const api = {
     list: () => request<DayProfile[]>('/day-profiles'),
     upsert: (dayType: string, body: Omit<DayProfile, 'id' | 'workspace_id' | 'day_type'>) =>
       request<DayProfile>(`/day-profiles/${dayType}`, { method: 'PUT', body: JSON.stringify(body) }),
+  },
+
+  schedule: {
+    apply: (taskId: string, patch: Partial<Task>) =>
+      request<{ task: Task; cascade: Task[]; loadEntries: LoadEntry[] }>(
+        '/schedule/apply',
+        { method: 'POST', body: JSON.stringify({ taskId, patch }) },
+      ),
   },
 
   assistant: {

@@ -307,10 +307,10 @@ Tasks are ordered by priority. Claude Code should work top to bottom, marking it
 
 ### Sprint 4 — Backend & Real Data
 
-- [ ] **BL-17** REST API: CRUD endpoints for projects, phases, and tasks
-- [ ] **BL-18** REST API: scheduling engine endpoint — given a task change (move, stretch, complete), return updated positions for all affected tasks and recalculated load bar values
-- [ ] **BL-19** Connect Planning view to live API (replace dummy data with real database data)
-- [ ] **BL-20** Persist Gantt interactions (drag-to-move, drag-to-stretch, progress update) to the database via the API
+- [x] **BL-17** REST API: CRUD endpoints for projects, phases, and tasks
+- [x] **BL-18** REST API: scheduling engine endpoint — given a task change (move, stretch, complete), return updated positions for all affected tasks and recalculated load bar values
+- [x] **BL-19** Connect Planning view to live API (replace dummy data with real database data)
+- [x] **BL-20** Persist Gantt interactions (drag-to-move, drag-to-stretch, progress update) to the database via the API
 
 ### Sprint 5 — Execution & Standup
 

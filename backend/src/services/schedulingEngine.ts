@@ -96,6 +96,61 @@ export function rescheduleTask(
   return { start_date: newStartDate, end_date: end, warning };
 }
 
+/**
+ * computeCascade — BL-18
+ *
+ * Given a task that just changed its dates, BFS through the dependency graph
+ * and shift any dependent tasks forward so they start the day after their
+ * prerequisite ends. Locked tasks are never moved.
+ *
+ * @param changedTaskId  The task whose end_date changed
+ * @param taskMap        Mutable map of all tasks (will be updated in-place)
+ * @returns              Array of {id, start_date, end_date} updates to apply to the DB
+ */
+export function computeCascade(
+  changedTaskId: string,
+  taskMap: Map<string, Task>,
+): Array<{ id: string; start_date: string; end_date: string }> {
+  // Build reverse-dependency index: taskId → [ids of tasks that depend on it]
+  const dependentsOf = new Map<string, string[]>();
+  for (const t of taskMap.values()) {
+    for (const depId of t.dependencies) {
+      if (!dependentsOf.has(depId)) dependentsOf.set(depId, []);
+      dependentsOf.get(depId)!.push(t.id);
+    }
+  }
+
+  const updates: Array<{ id: string; start_date: string; end_date: string }> = [];
+  const queue = [changedTaskId];
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const tid = queue.shift()!;
+    if (visited.has(tid)) continue;
+    visited.add(tid);
+
+    const task = taskMap.get(tid);
+    if (!task) continue;
+
+    for (const dependentId of (dependentsOf.get(tid) ?? [])) {
+      const dep = taskMap.get(dependentId);
+      if (!dep || dep.is_locked) continue;
+
+      // Shift dependent forward if it starts on or before this task's end
+      if (dep.start_date <= task.end_date) {
+        const newStart = addDays(task.end_date, 1);
+        const newEnd   = addDays(newStart, dep.duration_days - 1);
+        const shifted  = { ...dep, start_date: newStart, end_date: newEnd };
+        taskMap.set(dependentId, shifted);
+        updates.push({ id: dependentId, start_date: newStart, end_date: newEnd });
+        queue.push(dependentId);
+      }
+    }
+  }
+
+  return updates;
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function eachDay(start: string, end: string): string[] {
