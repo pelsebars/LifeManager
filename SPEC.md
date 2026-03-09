@@ -290,12 +290,12 @@ Tasks are ordered by priority. Claude Code should work top to bottom, marking it
 
 ### Sprint 2 — Planning View UI
 
-- [ ] **BL-06** Build the Phase Ribbon component — horizontal flow of START → Phase nodes → GOAL, driven by dummy data
-- [ ] **BL-07** Build the Gantt component — horizontal task bars on a date axis, labelled with phase reference (e.g. "1A"), driven by dummy data
-- [ ] **BL-08** Add lock icon to Gantt bars for tasks with a hard deadline constraint
-- [ ] **BL-09** Add internal progress fill to Gantt bars (hatched fill for consumed effort, solid for remaining)
-- [ ] **BL-10** Add dependency arrows between connected tasks on the Gantt
-- [ ] **BL-11** Build the Load Bar component — colour-coded (green/yellow/red) capacity bar beneath the Gantt on the same date axis, calculated from dummy data
+- [x] **BL-06** Build the Phase Ribbon component — horizontal flow of START → Phase nodes → GOAL, driven by dummy data
+- [x] **BL-07** Build the Gantt component — horizontal task bars on a date axis, labelled with phase reference (e.g. "1A"), driven by dummy data
+- [x] **BL-08** Add lock icon to Gantt bars for tasks with a hard deadline constraint
+- [x] **BL-09** Add internal progress fill to Gantt bars (hatched fill for consumed effort, solid for remaining)
+- [x] **BL-10** Add dependency arrows between connected tasks on the Gantt
+- [x] **BL-11** Build the Load Bar component — colour-coded (green/yellow/red) capacity bar beneath the Gantt on the same date axis, calculated from dummy data
 
 ### Sprint 3 — Gantt Interactions
 

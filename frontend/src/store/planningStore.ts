@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
 import type { Project, Phase, Task } from '../types';
+import { DUMMY_PROJECTS, DUMMY_PHASES, DUMMY_TASKS } from '../data/dummy';
 
 interface PlanningState {
   projects: Project[];
@@ -11,6 +12,7 @@ interface PlanningState {
   loading: boolean;
   error: string | null;
 
+  loadDummyData: () => void;
   loadProjects: () => Promise<void>;
   loadPhases: (projectId: string) => Promise<void>;
   loadTasks: (phaseId: string) => Promise<void>;
@@ -27,6 +29,16 @@ export const usePlanningStore = create<PlanningState>((set, _get) => ({
   selectedPhaseId: null,
   loading: false,
   error: null,
+
+  loadDummyData: () => {
+    set({
+      projects: DUMMY_PROJECTS,
+      phases: DUMMY_PHASES,
+      tasks: DUMMY_TASKS,
+      loading: false,
+      error: null,
+    });
+  },
 
   loadProjects: async () => {
     set({ loading: true, error: null });

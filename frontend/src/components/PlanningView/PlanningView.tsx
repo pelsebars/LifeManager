@@ -5,13 +5,10 @@ import { GanttChart } from './GanttChart';
 import { LoadBar } from './LoadBar';
 
 export function PlanningView() {
-  const { projects, selectedProjectId, loadProjects, loadPhases, selectProject } = usePlanningStore();
+  const { projects, selectedProjectId, loadDummyData, selectProject } = usePlanningStore();
 
-  useEffect(() => { loadProjects(); }, [loadProjects]);
-
-  useEffect(() => {
-    if (selectedProjectId) loadPhases(selectedProjectId);
-  }, [selectedProjectId, loadPhases]);
+  // BL-19 will replace this with loadProjects() once the API is connected
+  useEffect(() => { loadDummyData(); }, [loadDummyData]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '1rem', gap: '0.75rem' }}>
