@@ -18,7 +18,9 @@ interface PlanningState {
   loadTasks: (phaseId: string) => Promise<void>;
   selectProject: (id: string | null) => void;
   selectPhase: (id: string | null) => void;
-  updateTask: (id: string, patch: Partial<Task>) => Promise<void>;
+  selectedTaskId: string | null;
+  setSelectedTask: (id: string | null) => void;
+  updateTask: (id: string, patch: Partial<Task>) => void;
 }
 
 export const usePlanningStore = create<PlanningState>((set, _get) => ({
@@ -27,6 +29,7 @@ export const usePlanningStore = create<PlanningState>((set, _get) => ({
   tasks: {},
   selectedProjectId: null,
   selectedPhaseId: null,
+  selectedTaskId: null,
   loading: false,
   error: null,
 
@@ -62,15 +65,29 @@ export const usePlanningStore = create<PlanningState>((set, _get) => ({
 
   selectProject: (id) => set({ selectedProjectId: id, selectedPhaseId: null }),
   selectPhase: (id) => set({ selectedPhaseId: id }),
+  setSelectedTask: (id) => set({ selectedTaskId: id }),
 
-  updateTask: async (id, patch) => {
-    const updated = await api.tasks.update(id, patch);
+  // Optimistic update: applies to local state immediately so drag interactions
+  // work without a running backend. BL-20 will make the API call the source of truth.
+  updateTask: (id, patch) => {
     set((s) => {
       const newTasks = { ...s.tasks };
       for (const phaseId of Object.keys(newTasks)) {
-        newTasks[phaseId] = newTasks[phaseId].map((t) => (t.id === id ? { ...t, ...updated } : t));
+        newTasks[phaseId] = newTasks[phaseId].map((t) => {
+          if (t.id !== id) return t;
+          const merged = { ...t, ...patch };
+          // Keep end_date consistent whenever start_date or duration_days changes
+          if ('start_date' in patch || 'duration_days' in patch) {
+            const dt = new Date(merged.start_date);
+            dt.setDate(dt.getDate() + merged.duration_days - 1);
+            merged.end_date = dt.toISOString().slice(0, 10);
+          }
+          return merged;
+        });
       }
       return { tasks: newTasks };
     });
+    // BL-20: also persist to API once the backend is connected
+    api.tasks.update(id, patch).catch(() => {});
   },
 }));

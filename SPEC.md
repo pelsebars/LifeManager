@@ -299,11 +299,11 @@ Tasks are ordered by priority. Claude Code should work top to bottom, marking it
 
 ### Sprint 3 — Gantt Interactions
 
-- [ ] **BL-12** Implement drag-to-move on task bars (preserves effort and duration; shifts start/end dates)
-- [ ] **BL-13** Implement drag-to-stretch on task bar ends (preserves effort; adjusts duration and recalculates daily load)
-- [ ] **BL-14** Enforce lock constraint on drag — locked tasks cannot be dragged past their deadline date
-- [ ] **BL-15** Visual warning when a drag would violate a deadline or dependency order
-- [ ] **BL-16** Task detail panel — opens on click; allows editing title, effort, duration, deadline, progress
+- [x] **BL-12** Implement drag-to-move on task bars (preserves effort and duration; shifts start/end dates)
+- [x] **BL-13** Implement drag-to-stretch on task bar ends (preserves effort; adjusts duration and recalculates daily load)
+- [x] **BL-14** Enforce lock constraint on drag — locked tasks cannot be dragged past their deadline date
+- [x] **BL-15** Visual warning when a drag would violate a deadline or dependency order
+- [x] **BL-16** Task detail panel — opens on click; allows editing title, effort, duration, deadline, progress
 
 ### Sprint 4 — Backend & Real Data
 
