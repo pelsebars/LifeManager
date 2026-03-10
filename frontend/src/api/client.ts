@@ -1,4 +1,4 @@
-import type { Project, Phase, Task, DayProfile, LoadEntry } from '../types';
+import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry } from '../types';
 
 const BASE = '/api';
 
@@ -49,7 +49,7 @@ export const api = {
 
   tasks: {
     listByPhase: (phaseId: string) => request<Task[]>(`/tasks?phase_id=${phaseId}`),
-    listByDate: (date: string) => request<Task[]>(`/tasks?date=${date}`),
+    listByDate: (date: string) => request<TodayTask[]>(`/tasks?date=${date}`),
     create: (body: Partial<Task> & { phase_id: string }) =>
       request<Task>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
     update: (id: string, body: Partial<Task>) =>
@@ -73,7 +73,7 @@ export const api = {
 
   assistant: {
     standup: (body: { messages: unknown[]; date?: string }) =>
-      request<{ reply: string }>('/assistant/standup', { method: 'POST', body: JSON.stringify(body) }),
+      request<{ reply: string; slippedTasks: SlippedTask[] }>('/assistant/standup', { method: 'POST', body: JSON.stringify(body) }),
     query: (body: { question: string }) =>
       request<{ reply: string }>('/assistant/query', { method: 'POST', body: JSON.stringify(body) }),
   },

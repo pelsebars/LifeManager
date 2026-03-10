@@ -3,9 +3,10 @@ import { api } from '../../api/client';
 
 interface Props {
   onSuccess: () => void;
+  onDemoMode: () => void;
 }
 
-export function LoginPage({ onSuccess }: Props) {
+export function LoginPage({ onSuccess, onDemoMode }: Props) {
   const [mode, setMode]                 = useState<'login' | 'register'>('login');
   const [email, setEmail]               = useState('');
   const [password, setPassword]         = useState('');
@@ -122,8 +123,20 @@ export function LoginPage({ onSuccess }: Props) {
         </form>
 
         {mode === 'login' && (
-          <div style={{ marginTop: 16, fontSize: 11, color: '#aaa', textAlign: 'center' }}>
-            Demo: demo@lifemanager.app / demo1234
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#aaa', marginBottom: 10 }}>
+              Demo account: demo@lifemanager.app / demo1234
+            </div>
+            <button
+              type="button"
+              onClick={onDemoMode}
+              style={{
+                background: 'none', border: 'none', color: '#4a9eff',
+                fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0,
+              }}
+            >
+              Continue with demo data (no account needed)
+            </button>
           </div>
         )}
       </div>

@@ -314,18 +314,18 @@ Tasks are ordered by priority. Claude Code should work top to bottom, marking it
 
 ### Sprint 5 — Execution & Standup
 
-- [ ] **BL-21** Build "Today View" — simple list of tasks crossing today's date line, across all active projects, with mark-complete buttons
-- [ ] **BL-22** Implement dependency cascade — marking a task complete unblocks dependent tasks and updates their status
-- [ ] **BL-23** Set up Anthropic Claude API client as a dedicated Assistant Service module in the backend
-- [ ] **BL-24** Build Daily Standup UI — chat-style conversational interface in the Standup view
-- [ ] **BL-25** Implement standup flow: review yesterday's incomplete tasks → present today's tasks → flag deadline risks → confirm plan
-- [ ] **BL-26** Implement rescheduling logic in the Assistant Service — suggest shifts when tasks slip, propose changes for user confirmation before writing to database
+- [x] **BL-21** Build "Today View" — simple list of tasks crossing today's date line, across all active projects, with mark-complete buttons
+- [x] **BL-22** Implement dependency cascade — marking a task complete unblocks dependent tasks and updates their status
+- [x] **BL-23** Set up Anthropic Claude API client as a dedicated Assistant Service module in the backend
+- [x] **BL-24** Build Daily Standup UI — chat-style conversational interface in the Standup view
+- [x] **BL-25** Implement standup flow: review yesterday's incomplete tasks → present today's tasks → flag deadline risks → confirm plan
+- [x] **BL-26** Implement rescheduling logic in the Assistant Service — suggest shifts when tasks slip, propose changes for user confirmation before writing to database
 
 ### Sprint 6 — Capacity Model
 
-- [ ] **BL-27** Build Day Profile settings UI — configure free hours for workday / weekend / vacation day types
-- [ ] **BL-28** Wire day profiles into the load bar calculation (replace hardcoded capacity with user-defined profiles)
-- [ ] **BL-29** Apply capacity model in the standup — flag days where load exceeds available free hours
+- [x] **BL-27** Build Day Profile settings UI — configure free hours for workday / weekend / vacation day types
+- [x] **BL-28** Wire day profiles into the load bar calculation (replace hardcoded capacity with user-defined profiles)
+- [x] **BL-29** Apply capacity model in the standup — flag days where load exceeds available free hours
 
 ### Post-MVP (do not build yet)
 

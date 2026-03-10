@@ -23,13 +23,15 @@ tasksRouter.get('/', async (req, res) => {
   } else if (date) {
     const { rows } = await pool.query(
       `SELECT t.*,
+         ph.title AS phase_title,
+         p.title  AS project_title,
          COALESCE(json_agg(td.depends_on_id) FILTER (WHERE td.depends_on_id IS NOT NULL), '[]') AS dependencies
        FROM tasks t
        JOIN phases ph ON ph.id = t.phase_id
        JOIN projects p ON p.id = ph.project_id
        LEFT JOIN task_dependencies td ON td.task_id = t.id
        WHERE p.workspace_id = $1 AND $2::date BETWEEN t.start_date AND t.end_date
-       GROUP BY t.id
+       GROUP BY t.id, ph.title, p.title
        ORDER BY t.start_date`,
       [req.auth!.workspaceId, date]
     );

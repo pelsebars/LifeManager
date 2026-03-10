@@ -9,7 +9,7 @@ export function PlanningView() {
   const {
     projects, selectedProjectId, phases, tasks,
     loading, error,
-    loadDummyData, loadProjects, loadProjectTasks,
+    loadDummyData, loadProjects, loadProjectTasks, loadDayProfiles,
     selectProject,
     selectedTaskId, setSelectedTask, updateTask,
   } = usePlanningStore();
@@ -19,6 +19,7 @@ export function PlanningView() {
   useEffect(() => {
     if (hasToken) {
       loadProjects();
+      loadDayProfiles(); // BL-28: load user-defined capacity profiles
     } else {
       loadDummyData();
     }

@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
-import type { Project, Phase, Task, LoadEntry } from '../types';
-import { DUMMY_PROJECTS, DUMMY_PHASES, DUMMY_TASKS } from '../data/dummy';
+import type { Project, Phase, Task, DayProfile, LoadEntry } from '../types';
+import { DUMMY_PROJECTS, DUMMY_PHASES, DUMMY_TASKS, DUMMY_DAY_PROFILES } from '../data/dummy';
 
 interface PlanningState {
   projects: Project[];
   phases: Record<string, Phase[]>;     // keyed by project_id
   tasks: Record<string, Task[]>;       // keyed by phase_id
+  dayProfiles: DayProfile[];           // workday / weekend / vacation capacity
   loadEntries: LoadEntry[];            // latest load bar values from API
   selectedProjectId: string | null;
   selectedPhaseId: string | null;
@@ -19,6 +20,8 @@ interface PlanningState {
   loadProjectTasks: (projectId: string) => Promise<void>;
   loadPhases: (projectId: string) => Promise<void>;
   loadTasks: (phaseId: string) => Promise<void>;
+  loadDayProfiles: () => Promise<void>;
+  saveDayProfile: (dayType: string, body: { work_hours: number; commute_hours: number; free_hours: number }) => Promise<void>;
   selectProject: (id: string | null) => void;
   selectPhase: (id: string | null) => void;
   setSelectedTask: (id: string | null) => void;
@@ -29,6 +32,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   projects: [],
   phases: {},
   tasks: {},
+  dayProfiles: DUMMY_DAY_PROFILES,   // sensible defaults until API data loads
   loadEntries: [],
   selectedProjectId: null,
   selectedPhaseId: null,
@@ -38,7 +42,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   // ── Sprint 2/3 dev: load static data without a backend ───────────────────
   loadDummyData: () => {
-    set({ projects: DUMMY_PROJECTS, phases: DUMMY_PHASES, tasks: DUMMY_TASKS, loading: false, error: null });
+    set({ projects: DUMMY_PROJECTS, phases: DUMMY_PHASES, tasks: DUMMY_TASKS, dayProfiles: DUMMY_DAY_PROFILES, loading: false, error: null });
   },
 
   // ── BL-19: load live data from API ───────────────────────────────────────
@@ -80,6 +84,23 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   loadTasks: async (phaseId) => {
     const tasksData = await api.tasks.listByPhase(phaseId);
     set((s) => ({ tasks: { ...s.tasks, [phaseId]: tasksData } }));
+  },
+
+  // BL-27/28: load and save day profiles
+  loadDayProfiles: async () => {
+    try {
+      const profiles = await api.dayProfiles.list();
+      if (profiles.length > 0) set({ dayProfiles: profiles });
+    } catch {
+      // Backend not available — keep DUMMY defaults
+    }
+  },
+
+  saveDayProfile: async (dayType, body) => {
+    const saved = await api.dayProfiles.upsert(dayType, body);
+    set((s) => ({
+      dayProfiles: s.dayProfiles.map((p) => p.day_type === dayType ? saved : p),
+    }));
   },
 
   selectProject: (id) => set({ selectedProjectId: id, selectedPhaseId: null }),

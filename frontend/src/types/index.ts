@@ -87,3 +87,21 @@ export interface LoadEntry {
   available_hours: number;
   status: 'green' | 'yellow' | 'red';
 }
+
+/** Task enriched with phase/project context — returned by GET /api/tasks?date=... */
+export interface TodayTask extends Task {
+  phase_title: string;
+  project_title: string;
+}
+
+/** Slipped task with a proposed reschedule — returned by POST /api/assistant/standup */
+export interface SlippedTask {
+  id: string;
+  title: string;
+  phase_title: string;
+  project_title: string;
+  original_end: string;
+  proposed_start_date: string;
+  proposed_end_date: string;
+  warning?: string;
+}

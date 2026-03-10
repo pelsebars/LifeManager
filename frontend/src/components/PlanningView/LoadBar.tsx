@@ -12,8 +12,7 @@
 
 import { useMemo } from 'react';
 import { usePlanningStore } from '../../store/planningStore';
-import { DUMMY_DAY_PROFILES } from '../../data/dummy';
-import type { Task, LoadEntry } from '../../types';
+import type { Task, DayProfile, LoadEntry } from '../../types';
 
 interface Props {
   projectId: string;
@@ -30,10 +29,10 @@ function getDayType(dateStr: string): 'workday' | 'weekend' {
   return dow === 0 || dow === 6 ? 'weekend' : 'workday';
 }
 
-function computeLoad(tasks: Task[], days: string[]): LoadEntry[] {
-  // Use dummy profiles until BL-28 wires real day profiles
+function computeLoad(tasks: Task[], days: string[], profiles: DayProfile[]): LoadEntry[] {
+  // BL-28: use user-defined (or dummy fallback) day profiles
   const profileMap: Record<string, number> = {};
-  for (const p of DUMMY_DAY_PROFILES) {
+  for (const p of profiles) {
     profileMap[p.day_type] = p.free_hours;
   }
 
@@ -62,7 +61,7 @@ const WINDOW_START_OFFSET = -10;
 const WINDOW_DAYS = 45;
 
 export function LoadBar({ projectId }: Props) {
-  const { phases, tasks } = usePlanningStore();
+  const { phases, tasks, dayProfiles } = usePlanningStore();
   const projectPhases = phases[projectId] ?? [];
   const allTasks: Task[] = projectPhases.flatMap((ph) => tasks[ph.id] ?? []);
 
@@ -78,7 +77,7 @@ export function LoadBar({ projectId }: Props) {
     return result;
   }, []);
 
-  const entries = useMemo(() => computeLoad(allTasks, days), [allTasks, days]);
+  const entries = useMemo(() => computeLoad(allTasks, days, dayProfiles), [allTasks, days, dayProfiles]);
 
   const overloadedDays = entries.filter((e) => e.status === 'red').length;
   const tightDays = entries.filter((e) => e.status === 'yellow').length;

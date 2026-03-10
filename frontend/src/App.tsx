@@ -1,20 +1,27 @@
 import { useState } from 'react';
 import { PlanningView } from './components/PlanningView/PlanningView';
 import { StandupView } from './components/Standup/StandupView';
+import { DayProfileSettings } from './components/Settings/DayProfileSettings';
 import { LoginPage } from './components/Auth/LoginPage';
 
-type View = 'planning' | 'standup';
+type View = 'planning' | 'standup' | 'settings';
 
 export default function App() {
-  const [authed, setAuthed]  = useState(() => !!localStorage.getItem('token'));
+  const [authed, setAuthed]  = useState(() => !!localStorage.getItem('token') || !!localStorage.getItem('demoMode'));
   const [view, setView]      = useState<View>('planning');
 
   if (!authed) {
-    return <LoginPage onSuccess={() => setAuthed(true)} />;
+    return (
+      <LoginPage
+        onSuccess={() => setAuthed(true)}
+        onDemoMode={() => { localStorage.setItem('demoMode', '1'); setAuthed(true); }}
+      />
+    );
   }
 
   const handleSignOut = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('demoMode');
     setAuthed(false);
   };
 
@@ -28,6 +35,9 @@ export default function App() {
         <button onClick={() => setView('standup')} style={navBtn(view === 'standup')}>
           Daily Standup
         </button>
+        <button onClick={() => setView('settings')} style={navBtn(view === 'settings')}>
+          Capacity
+        </button>
         <button
           onClick={handleSignOut}
           style={{ marginLeft: 'auto', background: 'none', color: '#888', border: '1px solid #444', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}
@@ -36,7 +46,9 @@ export default function App() {
         </button>
       </nav>
       <main style={{ flex: 1, overflow: 'hidden' }}>
-        {view === 'planning' ? <PlanningView /> : <StandupView />}
+        {view === 'planning' && <PlanningView />}
+        {view === 'standup'  && <StandupView />}
+        {view === 'settings' && <div style={{ overflowY: 'auto', height: '100%' }}><DayProfileSettings /></div>}
       </main>
     </div>
   );
