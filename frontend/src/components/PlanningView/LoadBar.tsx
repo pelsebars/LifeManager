@@ -6,16 +6,24 @@
  *   Yellow = load between 80–100%
  *   Red    = overloaded
  *
- * Calculation: for each day, sum (remaining effort / duration_days) across all
- * tasks that span that day, and compare to free_hours from the day profile.
+ * BL-28: Uses user-defined day profiles for capacity.
+ *
+ * The bar is aligned with the Gantt timeline — it shares the same sidebar
+ * offset on the left, and day segments are positioned proportionally to
+ * visibleTimeStart/End so scrolling or zooming the Gantt keeps them in sync.
  */
 
-import { useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import moment from 'moment';
 import { usePlanningStore } from '../../store/planningStore';
-import type { Task, DayProfile, LoadEntry } from '../../types';
+import { useRoutineStore } from '../../store/routineStore';
+import { SIDEBAR_WIDTH } from './GanttChart';
+import type { Task, Routine, DayProfile, LoadEntry } from '../../types';
 
 interface Props {
-  projectId: string;
+  visibleTimeStart: number;
+  visibleTimeEnd: number;
+  ganttCanvasWidth?: number; // exact canvas width from the Gantt — use this for pixel-perfect alignment
 }
 
 const STATUS_COLOR: Record<LoadEntry['status'], string> = {
@@ -25,119 +33,183 @@ const STATUS_COLOR: Record<LoadEntry['status'], string> = {
 };
 
 function getDayType(dateStr: string): 'workday' | 'weekend' {
-  const dow = new Date(dateStr).getDay(); // 0=Sun, 6=Sat
+  const dow = new Date(dateStr + 'T12:00:00').getDay(); // midday avoids DST edge cases
   return dow === 0 || dow === 6 ? 'weekend' : 'workday';
 }
 
-function computeLoad(tasks: Task[], days: string[], profiles: DayProfile[]): LoadEntry[] {
-  // BL-28: use user-defined (or dummy fallback) day profiles
+type Band = 'work' | 'personal';
+
+function computeLoad(tasks: Task[], days: string[], profiles: DayProfile[], band: Band, routines: Routine[]): LoadEntry[] {
   const profileMap: Record<string, number> = {};
   for (const p of profiles) {
-    profileMap[p.day_type] = p.free_hours;
+    // work band → work_hours capacity; personal band → free_hours capacity
+    // NUMERIC columns come back as strings from node-postgres — coerce to Number
+    profileMap[p.day_type] = band === 'work' ? Number(p.work_hours ?? 8) : Number(p.free_hours ?? 3);
   }
 
-  return days.map((date) => {
-    const dayType = getDayType(date);
-    const available = profileMap[dayType] ?? 3;
+  const bandTasks = tasks.filter((t) => (t.category ?? 'personal') === band);
+  // Routine occurrences contribute to the same capacity pool as their category
+  const bandRoutines = routines.filter((r) => r.category === band);
 
-    const planned = tasks
+  return days.map((date) => {
+    const dayType   = getDayType(date);
+    const available = profileMap[dayType] ?? (band === 'work' ? 8 : 3);
+
+    const planned = bandTasks
       .filter((t) => t.status !== 'completed' && t.status !== 'deferred')
-      .filter((t) => date >= t.start_date && date <= t.end_date)
+      .filter((t) => date >= t.start_date.slice(0, 10) && date <= t.end_date.slice(0, 10))
       .reduce((sum, t) => {
-        const remaining = t.effort * (1 - t.progress_pct / 100);
+        const remaining = Number(t.effort) * (1 - t.progress_pct / 100);
         return sum + remaining / t.duration_days;
       }, 0);
 
-    const ratio = available > 0 ? planned / available : (planned > 0 ? Infinity : 0);
+    // Add routine effort for any occurrence on this date
+    // NOTE: effort_hours is a NUMERIC column — node-postgres returns it as a string,
+    // so we coerce to Number to avoid "0 + '1.5'" = "01.5" string concatenation.
+    const routinePlanned = bandRoutines.reduce((sum, r) => {
+      return r.occurrences.includes(date) ? sum + Number(r.effort_hours) : sum;
+    }, 0);
+
+    const ratio  = available > 0 ? (planned + routinePlanned) / available : ((planned + routinePlanned) > 0 ? Infinity : 0);
     const status: LoadEntry['status'] =
       ratio <= 0.8 ? 'green' : ratio <= 1.0 ? 'yellow' : 'red';
 
-    return { date, planned_hours: planned, available_hours: available, status };
+    return { date, planned_hours: planned + routinePlanned, available_hours: available, status };
   });
 }
 
-// Build 45 days starting 10 days ago (matches default Gantt window)
-const WINDOW_START_OFFSET = -10;
-const WINDOW_DAYS = 45;
-
-export function LoadBar({ projectId }: Props) {
+export function LoadBar({ visibleTimeStart, visibleTimeEnd, ganttCanvasWidth }: Props) {
   const { phases, tasks, dayProfiles } = usePlanningStore();
-  const projectPhases = phases[projectId] ?? [];
-  const allTasks: Task[] = projectPhases.flatMap((ph) => tasks[ph.id] ?? []);
+  const { routines } = useRoutineStore();
+  // Load bar shows combined load across ALL projects — that's the point of it.
+  // The selected project (projectId) only drives the Gantt above; capacity is global.
+  const allTasks: Task[] = Object.values(phases).flat().flatMap((ph) => tasks[ph.id] ?? []);
 
-  const days = useMemo(() => {
-    const result: string[] = [];
-    const base = new Date();
-    base.setDate(base.getDate() + WINDOW_START_OFFSET);
-    for (let i = 0; i < WINDOW_DAYS; i++) {
-      const d = new Date(base);
-      d.setDate(d.getDate() + i);
-      result.push(d.toISOString().slice(0, 10));
-    }
-    return result;
+  // Measure our own container width so we can match the Gantt's pixel scale
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((e) => setContainerWidth(e[0].contentRect.width));
+    ro.observe(containerRef.current);
+    setContainerWidth(containerRef.current.clientWidth);
+    return () => ro.disconnect();
   }, []);
 
-  const entries = useMemo(() => computeLoad(allTasks, days, dayProfiles), [allTasks, days, dayProfiles]);
+  // Use the Gantt's exact canvas width when available (avoids scrollbar-width drift).
+  // Fall back to measuring our own container on first render before the Gantt has scrolled.
+  const canvasWidth = (ganttCanvasWidth != null && ganttCanvasWidth > 0)
+    ? ganttCanvasWidth
+    : Math.max(0, containerWidth - SIDEBAR_WIDTH - 1);
 
-  const overloadedDays = entries.filter((e) => e.status === 'red').length;
-  const tightDays = entries.filter((e) => e.status === 'yellow').length;
+  // Build a day array covering the entire visible window
+  const days = useMemo(() => {
+    const result: string[] = [];
+    const cur = moment(visibleTimeStart).startOf('day');
+    const end = moment(visibleTimeEnd).startOf('day');
+    while (cur.isSameOrBefore(end)) {
+      result.push(cur.format('YYYY-MM-DD'));
+      cur.add(1, 'day');
+    }
+    return result;
+  }, [visibleTimeStart, visibleTimeEnd]);
+
+  const workEntries = useMemo(
+    () => computeLoad(allTasks, days, dayProfiles, 'work', routines),
+    [allTasks, days, dayProfiles, routines],
+  );
+  const personalEntries = useMemo(
+    () => computeLoad(allTasks, days, dayProfiles, 'personal', routines),
+    [allTasks, days, dayProfiles, routines],
+  );
+
+  // Convert a moment timestamp → canvas pixel (relative to canvas left edge)
+  const msPerPx = canvasWidth > 0 ? (visibleTimeEnd - visibleTimeStart) / canvasWidth : 1;
+  function toX(ms: number) { return (ms - visibleTimeStart) / msPerPx; }
+
+  function renderBand(entries: LoadEntry[]) {
+    if (!canvasWidth) return null;
+    return entries.map((entry) => {
+      const dayStart = moment(entry.date).valueOf();
+      const left  = toX(dayStart);
+      const width = toX(moment(entry.date).add(1, 'day').valueOf()) - left;
+      return (
+        <div
+          key={entry.date}
+          title={`${entry.date}  ${entry.planned_hours.toFixed(1)}h / ${entry.available_hours}h`}
+          style={{
+            position: 'absolute', top: 0, bottom: 0, left, width,
+            background: STATUS_COLOR[entry.status],
+            opacity: entry.planned_hours < 0.05 ? 0.12 : 0.8,
+          }}
+        />
+      );
+    });
+  }
+
+  const workOverload    = workEntries.filter((e) => e.status === 'red').length;
+  const personalOverload = personalEntries.filter((e) => e.status === 'red').length;
+
+  const BAND_HEIGHT = 14;
+  const LABEL_STYLE: React.CSSProperties = {
+    width: SIDEBAR_WIDTH + 1,
+    boxSizing: 'border-box',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    paddingLeft: 8,
+    background: '#f5f5f5',
+    borderRight: '1px solid #ddd',
+    borderLeft: '1px solid #e0e0e0',
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    color: '#999',
+  };
+  const CANVAS_STYLE: React.CSSProperties = {
+    flex: 1,
+    position: 'relative',
+    overflow: 'hidden',
+    borderRight: '1px solid #e0e0e0',
+  };
 
   return (
-    <div style={{ userSelect: 'none' }}>
-      {/* Header row */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 4,
-      }}>
-        <span style={{ fontSize: 10, color: '#999', fontWeight: 700, letterSpacing: '0.06em' }}>
-          CAPACITY LOAD — NEXT {WINDOW_DAYS} DAYS
-        </span>
-        <span style={{ fontSize: 11, color: '#888' }}>
-          {overloadedDays > 0 && (
-            <span style={{ color: '#ef4444', marginRight: 8 }}>
-              ⚠ {overloadedDays} overloaded {overloadedDays === 1 ? 'day' : 'days'}
-            </span>
-          )}
-          {tightDays > 0 && (
-            <span style={{ color: '#ff9800' }}>
-              {tightDays} tight {tightDays === 1 ? 'day' : 'days'}
-            </span>
-          )}
-        </span>
+    <div ref={containerRef} style={{ userSelect: 'none' }}>
+
+      {/* Two-band bar */}
+      <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #e0e0e0', borderRadius: 6, overflow: 'hidden' }}>
+
+        {/* Work band */}
+        <div style={{ display: 'flex', height: BAND_HEIGHT, borderBottom: '1px solid #e8e8e8' }}>
+          <div style={{ ...LABEL_STYLE, color: workOverload > 0 ? '#ef4444' : '#999' }}>
+            💼 WORK
+          </div>
+          <div style={CANVAS_STYLE}>{renderBand(workEntries)}</div>
+        </div>
+
+        {/* Personal band */}
+        <div style={{ display: 'flex', height: BAND_HEIGHT }}>
+          <div style={{ ...LABEL_STYLE, color: personalOverload > 0 ? '#ef4444' : '#999' }}>
+            🌿 LIFE
+          </div>
+          <div style={CANVAS_STYLE}>{renderBand(personalEntries)}</div>
+        </div>
+
       </div>
 
-      {/* Bar */}
-      <div style={{
-        display: 'flex', height: 20, borderRadius: 4, overflow: 'hidden',
-        border: '1px solid #e0e0e0',
-      }}>
-        {entries.map((entry) => (
-          <div
-            key={entry.date}
-            title={`${entry.date}  ${entry.planned_hours.toFixed(1)}h planned / ${entry.available_hours}h available`}
-            style={{
-              flex: 1,
-              background: STATUS_COLOR[entry.status],
-              opacity: entry.planned_hours < 0.05 ? 0.12 : 0.8,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Legend + date labels */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between',
-        alignItems: 'center', marginTop: 4,
-      }}>
+      {/* Legend + alerts */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, paddingLeft: SIDEBAR_WIDTH + 4 }}>
         <div style={{ display: 'flex', gap: '1rem', fontSize: 11, color: '#777' }}>
-          <span><span style={{ color: STATUS_COLOR.green }}>■</span> Under capacity</span>
+          <span><span style={{ color: STATUS_COLOR.green }}>■</span> Under</span>
           <span><span style={{ color: STATUS_COLOR.yellow }}>■</span> Tight</span>
-          <span><span style={{ color: STATUS_COLOR.red }}>■</span> Overloaded</span>
+          <span><span style={{ color: STATUS_COLOR.red }}>■</span> Over</span>
         </div>
-        <div style={{ fontSize: 10, color: '#aaa' }}>
-          {days[0]} – {days[days.length - 1]}
+        <div style={{ fontSize: 11, color: '#888', display: 'flex', gap: 10 }}>
+          {workOverload > 0 && <span style={{ color: '#ef4444' }}>⚠ {workOverload} work day{workOverload > 1 ? 's' : ''} overloaded</span>}
+          {personalOverload > 0 && <span style={{ color: '#ef4444' }}>⚠ {personalOverload} life day{personalOverload > 1 ? 's' : ''} overloaded</span>}
         </div>
       </div>
+
     </div>
   );
 }

@@ -18,6 +18,7 @@ interface StandupInput {
   today: string;
   overloadedDays?: string[];
   capacityProfiles?: Record<string, number>;
+  todayRoutines?: { name: string; category: string; effort_hours: number }[];
 }
 
 interface QueryInput {
@@ -26,7 +27,7 @@ interface QueryInput {
 }
 
 export const assistantService = {
-  async standup({ messages, todayTasks, incompleteTasks, today, overloadedDays, capacityProfiles }: StandupInput): Promise<string> {
+  async standup({ messages, todayTasks, incompleteTasks, today, overloadedDays, capacityProfiles, todayRoutines }: StandupInput): Promise<string> {
     // BL-29: include capacity context in the system prompt
     const capacitySection = capacityProfiles
       ? `\nCapacity profiles (free hours/day): ${JSON.stringify(capacityProfiles)}`
@@ -35,12 +36,16 @@ export const assistantService = {
       ? `\n⚠ Overloaded days in the next 7 days (planned > available free hours): ${overloadedDays.join(', ')}`
       : '\nNo overloaded days in the next 7 days.';
 
+    const routinesSection = todayRoutines && todayRoutines.length > 0
+      ? `\nToday's recurring commitments (already consuming capacity):\n${todayRoutines.map((r) => `  • ${r.name} (${r.effort_hours}h ${r.category})`).join('\n')}`
+      : '';
+
     const systemPrompt = `You are LifeManager, a personal life assistant running a daily standup.
-Today is ${today}.${capacitySection}${overloadSection}
+Today is ${today}.${capacitySection}${overloadSection}${routinesSection}
 
 Your job:
 1. Review tasks that were scheduled for yesterday but not completed. For each, ask the user whether to shift forward, defer, or drop.
-2. Present today's scheduled tasks with project/phase context.
+2. Present today's scheduled tasks with project/phase context. Factor in any recurring commitments listed above when assessing how much bandwidth is left.
 3. Flag any deadline risks and capacity overloads coming up.
 4. Confirm the plan with the user.
 

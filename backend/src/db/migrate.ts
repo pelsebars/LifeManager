@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { pool } from './pool';
 
-async function migrate() {
+export async function runMigrations(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query(`
@@ -46,11 +46,12 @@ async function migrate() {
     console.log('Migrations complete');
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
-migrate().catch((err) => {
-  console.error('Migration failed:', err);
-  process.exit(1);
-});
+// CLI entry point: npm run migrate
+if (require.main === module) {
+  runMigrations()
+    .then(() => pool.end())
+    .catch((err) => { console.error('Migration failed:', err); process.exit(1); });
+}

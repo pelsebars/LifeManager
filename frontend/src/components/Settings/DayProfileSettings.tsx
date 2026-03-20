@@ -80,7 +80,7 @@ function ProfileCard({ dayType, profile, onSave }: {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
         <NumberField
           label="Work hours"
           hint="hrs in paid work"
@@ -143,7 +143,7 @@ function NumberField({ label, hint, value, onChange, highlight }: {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           style={{
-            width: '100%', padding: '8px 32px 8px 10px', borderRadius: 6,
+            width: '100%', minWidth: 70, padding: '8px 28px 8px 10px', borderRadius: 6,
             border: `1.5px solid ${highlight ? '#93c5fd' : '#e5e7eb'}`,
             fontSize: 15, fontWeight: highlight ? 700 : 400,
             color: highlight ? '#1d4ed8' : '#111',
@@ -184,7 +184,7 @@ export function DayProfileSettings() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
         {(['workday', 'weekend', 'vacation'] as DayType[]).map((dt) => (
           <ProfileCard
             key={dt}

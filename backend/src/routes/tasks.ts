@@ -43,15 +43,15 @@ tasksRouter.get('/', async (req, res) => {
 
 // POST /api/tasks
 tasksRouter.post('/', async (req, res) => {
-  const { phase_id, title, description, effort, duration_days, start_date, deadline, is_locked, owner_id, dependencies } = req.body;
+  const { phase_id, title, description, effort, duration_days, start_date, deadline, is_locked, owner_id, dependencies, category } = req.body;
   const end_date = computeEndDate(start_date, duration_days);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows: [task] } = await client.query(
-      `INSERT INTO tasks (phase_id, owner_id, title, description, effort, duration_days, start_date, end_date, deadline, is_locked)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [phase_id, owner_id ?? req.auth!.userId, title, description ?? null, effort ?? 1, duration_days ?? 1, start_date, end_date, deadline ?? null, is_locked ?? false]
+      `INSERT INTO tasks (phase_id, owner_id, title, description, effort, duration_days, start_date, end_date, deadline, is_locked, category)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [phase_id, owner_id ?? req.auth!.userId, title, description ?? null, effort ?? 1, duration_days ?? 1, start_date, end_date, deadline ?? null, is_locked ?? false, category ?? 'personal']
     );
     if (dependencies?.length) {
       for (const depId of dependencies) {
@@ -73,7 +73,7 @@ tasksRouter.post('/', async (req, res) => {
 
 // PATCH /api/tasks/:id
 tasksRouter.patch('/:id', async (req, res) => {
-  const allowed = ['title', 'description', 'effort', 'duration_days', 'start_date', 'deadline', 'is_locked', 'progress_pct', 'status'];
+  const allowed = ['title', 'description', 'effort', 'duration_days', 'start_date', 'deadline', 'is_locked', 'progress_pct', 'status', 'category'];
   const entries = Object.entries(req.body).filter(([k]) => allowed.includes(k));
 
   // Recompute end_date if start_date or duration_days changes

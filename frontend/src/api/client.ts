@@ -1,4 +1,4 @@
-import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry } from '../types';
+import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry, Routine } from '../types';
 
 const BASE = '/api';
 
@@ -69,6 +69,17 @@ export const api = {
         '/schedule/apply',
         { method: 'POST', body: JSON.stringify({ taskId, patch }) },
       ),
+  },
+
+  routines: {
+    list: () => request<Routine[]>('/routines'),
+    create: (body: { name: string; category: string; effort_hours: number }) =>
+      request<Routine>('/routines', { method: 'POST', body: JSON.stringify(body) }),
+    delete: (id: string) => request<void>(`/routines/${id}`, { method: 'DELETE' }),
+    toggleOccurrence: (id: string, date: string) =>
+      request<{ date: string; active: boolean }>(`/routines/${id}/occurrences`, {
+        method: 'POST', body: JSON.stringify({ date }),
+      }),
   },
 
   assistant: {

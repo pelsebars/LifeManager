@@ -51,7 +51,7 @@ function buildProfileMap(
 
 const PATCHABLE = new Set([
   'start_date', 'duration_days', 'effort', 'progress_pct', 'status',
-  'title', 'description', 'deadline', 'is_locked',
+  'title', 'description', 'deadline', 'is_locked', 'category',
 ]);
 
 // ── route ─────────────────────────────────────────────────────────────────────

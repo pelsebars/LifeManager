@@ -47,6 +47,15 @@ assistantRouter.post('/standup', async (req, res) => {
     if (planned > available) overloadedDays.push(ds);
   }
 
+  // Fetch today's routine occurrences for standup context
+  const { rows: todayRoutines } = await pool.query(
+    `SELECT r.name, r.category, r.effort_hours
+     FROM routine_occurrences ro
+     JOIN routines r ON r.id = ro.routine_id
+     WHERE r.workspace_id = $1 AND ro.date = $2::date`,
+    [workspaceId, today],
+  );
+
   // Fetch context: today's tasks + yesterday's incomplete tasks
   const { rows: todayTasks } = await pool.query(
     `SELECT t.title, t.status, t.progress_pct, t.effort, t.duration_days, ph.title AS phase_title, p.title AS project_title
@@ -101,16 +110,21 @@ assistantRouter.post('/standup', async (req, res) => {
     };
   });
 
-  const reply = await assistantService.standup({
-    messages: messages ?? [],
-    todayTasks,
-    incompleteTasks: incompleteRows,
-    today,
-    overloadedDays,
-    capacityProfiles: profileMap,
-  });
-
-  res.json({ reply, slippedTasks });
+  try {
+    const reply = await assistantService.standup({
+      messages: messages ?? [],
+      todayTasks,
+      incompleteTasks: incompleteRows,
+      today,
+      overloadedDays,
+      capacityProfiles: profileMap,
+      todayRoutines,
+    });
+    res.json({ reply, slippedTasks });
+  } catch (err: any) {
+    console.error('[standup] assistant error:', err?.message ?? err);
+    res.status(502).json({ error: 'Assistant unavailable: ' + (err?.message ?? 'unknown error') });
+  }
 });
 
 // POST /api/assistant/query — natural language question about the plan
@@ -137,6 +151,11 @@ assistantRouter.post('/query', async (req, res) => {
     [workspaceId]
   );
 
-  const reply = await assistantService.query({ question, projects });
-  res.json({ reply });
+  try {
+    const reply = await assistantService.query({ question, projects });
+    res.json({ reply });
+  } catch (err: any) {
+    console.error('[query] assistant error:', err?.message ?? err);
+    res.status(502).json({ error: 'Assistant unavailable: ' + (err?.message ?? 'unknown error') });
+  }
 });

@@ -327,9 +327,35 @@ Tasks are ordered by priority. Claude Code should work top to bottom, marking it
 - [x] **BL-28** Wire day profiles into the load bar calculation (replace hardcoded capacity with user-defined profiles)
 - [x] **BL-29** Apply capacity model in the standup — flag days where load exceeds available free hours
 
+### Sprint 7 — Misc smaller corrections
+- [x] **BL-30** In the gantt view, upper right there is a strange red rectangle shown all the time. Can that be removed?
+- [x] **BL-31** There is a small misalignment between the load bar at the bottom and the actual gantt, like 20 pixels or something. Can you align them
+- [x] **BL-32** The phases are not shown on top of the top most task like we agreed. Can you fix that?
+- [x] **BL-33** In the Capacity Settings view, it's hard to see the numbers in the entry fields, only half the number can be seen. Please make fields wider.
+- [x] **BL-34** In the Capacity Settings view, once I have made changes, I cannot save. Button turns blue alright, but nothing happens, says "unsaved changes"
+
+### Sprint 7 — Getting closer to MVP Phase 1
+- [x] **BL-35** It should be possible to add new Projects. Perhaps a button in the top header saying "new Project"
+- [x] **BL-36** It should be possible to delete projects. There MUST be a user warning that all data from the project will be for all eternity
+- [x] **BL-37** It should be possible to add and delete constraints in the "edit task" view like it is when you "add new task". Functionality can be copied from "add tasks"
+
+### Sprint 8 — Getting closer to MVP Phase 2
+- [ ] **BL-34** it should be possible to add new phases to a project. For that we need to replace the current functionality of the "+" we have now. Perhaps the "+" can bring up a little pop up window with two options: 1: Add Phase and 2: Add Task
+- [ ] **BL-35** it should be possible to delete a task when editing it. Perhaps a delete button
+- [ ] **BL-36** When dragging a task before the end of another taks that it depends upon, it should be rendered red
+- [ ] **BL-37** You should keep track of the architecture your building. Please generate an architecture document for you to read when I start a new chat (could be because your context window is running full or something)
+- [ ] **BL-38** It must be possible to delete a phase. When you left click the phase name in the bar, we should bring up an edit window similar to the edit task window
+- [ ] **BL-39** The edit phase window must make it possible to edit the name of the phase
+- [ ] **BL-40** The edit phase window must make it possible to delete the Phase (and thus all taks in the phase) - the deletion must be confirmed by the user
+
+### Sprint 9 — Getting closer to MVP Phase 3
+
+
+
 ### Post-MVP (do not build yet)
 
-- [ ] **BL-30** Multi-user sharing UI — workspace invite flow, shared project visibility, cross-user load view
-- [ ] **BL-31** External calendar integration — iCal/CalDAV read-only feed, imported as time blocks affecting capacity
-- [ ] **BL-32** Per-day capacity overrides — individual date exceptions to day type defaults
-- [ ] **BL-33** Mobile-responsive view
+- [ ] **BL-xx** Multi-user sharing UI — workspace invite flow, shared project visibility, cross-user load view
+- [ ] **BL-xx** The ability to export complete expanded gantt view as picture for printing.
+- [ ] **BL-xx** External calendar integration — iCal/CalDAV read-only feed, imported as time blocks affecting capacity
+- [ ] **BL-xx** Per-day capacity overrides — individual date exceptions to day type defaults
+- [ ] **BL-xx** Mobile-responsive view

@@ -8,6 +8,8 @@ import { dayProfilesRouter } from './routes/dayProfiles';
 import { assistantRouter } from './routes/assistant';
 import { authRouter } from './routes/auth';
 import { scheduleRouter } from './routes/schedule';
+import { routinesRouter } from './routes/routines';
+import { runMigrations } from './db/migrate';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -23,9 +25,18 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/day-profiles', dayProfilesRouter);
 app.use('/api/assistant', assistantRouter);
 app.use('/api/schedule', scheduleRouter);
+app.use('/api/routines', routinesRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-app.listen(PORT, () => {
-  console.log(`Backend listening on port ${PORT}`);
+async function start() {
+  await runMigrations();
+  app.listen(PORT, () => {
+    console.log(`Backend listening on port ${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error('Failed to start:', err);
+  process.exit(1);
 });

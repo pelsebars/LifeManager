@@ -2,3 +2,14 @@
 node_modules/
 dist/
 *.js.map
+
+# Mac
+.DS_Store
+
+# Claude Code session data
+.claude/
+
+# Personal files
+*.jpeg
+*.jpg
+*.png

@@ -53,12 +53,15 @@ export interface Phase {
  * These are DIFFERENT. A task can have 2h effort spread over 10 days.
  * Daily load contribution = effort / duration_days.
  */
+export type TaskCategory = 'work' | 'personal';
+
 export interface Task {
   id: string;
   phase_id: string;
   owner_id: string;
   title: string;
   description?: string;
+  category: TaskCategory;   // which capacity pool this draws from
   effort: number;           // total hours of work required
   duration_days: number;    // calendar days the task occupies
   start_date: string;       // YYYY-MM-DD
@@ -86,6 +89,17 @@ export interface LoadEntry {
   planned_hours: number;
   available_hours: number;
   status: 'green' | 'yellow' | 'red';
+}
+
+export interface Routine {
+  id: string;
+  workspace_id: string;
+  name: string;
+  category: TaskCategory;
+  effort_hours: number;
+  occurrences: string[];  // YYYY-MM-DD dates loaded from API
+  created_at: string;
+  updated_at: string;
 }
 
 /** Task enriched with phase/project context — returned by GET /api/tasks?date=... */
