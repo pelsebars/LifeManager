@@ -284,8 +284,10 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
             });
           });
         }
-        // If the filter hid all tasks, remove the project header so the row doesn't appear empty
-        if (groups.length === rowsBefore) {
+        // If the filter hid all tasks (but there are tasks), remove the header so the row doesn't appear empty.
+        // But keep the header for truly empty projects so the user can add tasks via the "+" menu.
+        const hasAnyTasks = (phases[project.id] ?? []).some((ph) => (tasks[ph.id] ?? []).length > 0);
+        if (groups.length === rowsBefore && hasAnyTasks) {
           groups.pop();
         }
       }
