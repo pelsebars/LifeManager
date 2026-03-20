@@ -1,6 +1,8 @@
 import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry, Routine } from '../types';
 
-const BASE = '/api';
+// In production VITE_API_URL points to Railway (e.g. https://xxx.up.railway.app)
+// In local dev it's empty and we fall back to /api (proxied by Vite)
+const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem('token');
