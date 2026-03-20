@@ -174,7 +174,6 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
     groupIndexById,
     phaseRefMap,
     phaseFirstRowIndex,
-    \_projectHeaderRow,
     dependentsOf,
     arrows,
   } = useMemo(() => {
@@ -184,7 +183,6 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
     const groupIndexById = new Map<string, number>(); // taskId → index in groups array
     const phaseRefMap = new Map<string, string>();
     const phaseFirstRowIndex = new Map<string, number>(); // phaseId → groups array index
-    const _\_projectHeaderRow = new Map<string, number>();  // projectId → groups array index
 
     // ── Routine swimlanes (pinned above project rows) ─────────────────────────
     const visibleRoutines = routines.filter((r) =>
@@ -219,7 +217,6 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
 
       // Project header group — title is plain string; groupRenderer handles visuals
       const headerGroupIndex = groups.length;
-      \_projectHeaderRow.set(project.id, headerGroupIndex);
       groups.push({ id: projHeaderId, title: project.title, menuOpen: addMenuProjectId === project.id });
 
       if (!isExpanded) {
@@ -291,7 +288,6 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
         // If the filter hid all tasks, remove the project header so the row doesn't appear empty
         if (groups.length === rowsBefore) {
           groups.pop();
-          \_projectHeaderRow.delete(project.id);
         }
       }
 
@@ -314,7 +310,6 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
       }
     }
 
-    return { groups, items, taskById, groupIndexById, phaseRefMap, phaseFirstRowIndex, \_projectHeaderRow, dependentsOf, arrows };
   }, [projects, phases, tasks, expandedProjects, toggleProject, addMenuProjectId, showWork, showPersonal, routines]);
 
   // ── BL-14: move/resize validator ──────────────────────────────────────────
