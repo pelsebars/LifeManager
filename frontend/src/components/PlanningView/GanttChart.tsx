@@ -216,7 +216,6 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
       const projHeaderId = '__proj__' + project.id;
 
       // Project header group — title is plain string; groupRenderer handles visuals
-      const headerGroupIndex = groups.length;
       groups.push({ id: projHeaderId, title: project.title, menuOpen: addMenuProjectId === project.id });
 
       if (!isExpanded) {
@@ -310,6 +309,7 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
       }
     }
 
+    return { groups, items, taskById, groupIndexById, phaseRefMap, phaseFirstRowIndex, dependentsOf, arrows };
   }, [projects, phases, tasks, expandedProjects, toggleProject, addMenuProjectId, showWork, showPersonal, routines]);
 
   // ── BL-14: move/resize validator ──────────────────────────────────────────
@@ -804,7 +804,7 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
       {/* BL-10: dependency arrows — own SVG with overflow:visible so nothing gets clipped */}
       {canvasWidth > 0 && (
         <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible', zIndex: 202 }}>
-          {arrows.map(({ fromTaskId, toTaskId }) => {
+          {arrows.map(({ fromTaskId, toTaskId }: Arrow) => {
             const from = taskById.get(fromTaskId);
             const to   = taskById.get(toTaskId);
             if (!from || !to) return null;
