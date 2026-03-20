@@ -11,7 +11,7 @@ interface RoutineState {
   toggleOccurrence: (routineId: string, date: string) => Promise<void>;
 }
 
-export const useRoutineStore = create<RoutineState>((set, get) => ({
+export const useRoutineStore = create<RoutineState>((set) => ({
   routines: [],
   loaded: false,
 
