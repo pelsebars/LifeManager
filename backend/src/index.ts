@@ -9,6 +9,7 @@ import { assistantRouter } from './routes/assistant';
 import { authRouter } from './routes/auth';
 import { scheduleRouter } from './routes/schedule';
 import { routinesRouter } from './routes/routines';
+import { backlogRouter } from './routes/backlog';
 import { runMigrations } from './db/migrate';
 
 const app = express();
@@ -31,6 +32,7 @@ app.use('/api/day-profiles', dayProfilesRouter);
 app.use('/api/assistant', assistantRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/routines', routinesRouter);
+app.use('/api/backlog', backlogRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 

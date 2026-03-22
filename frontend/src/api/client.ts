@@ -1,4 +1,4 @@
-import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry, Routine } from '../types';
+import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry, Routine, BacklogItem, BacklogBucket } from '../types';
 
 // In production VITE_API_URL points to Railway (e.g. https://xxx.up.railway.app)
 // In local dev it's empty and we fall back to /api (proxied by Vite)
@@ -82,6 +82,22 @@ export const api = {
       request<{ date: string; active: boolean }>(`/routines/${id}/occurrences`, {
         method: 'POST', body: JSON.stringify({ date }),
       }),
+  },
+
+  backlog: {
+    listItems: () => request<BacklogItem[]>('/backlog'),
+    createItem: (body: { title: string; description?: string; category?: string; effort?: number | null; bucket_id?: string | null }) =>
+      request<BacklogItem>('/backlog', { method: 'POST', body: JSON.stringify(body) }),
+    updateItem: (id: string, body: Partial<BacklogItem>) =>
+      request<BacklogItem>(`/backlog/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    deleteItem: (id: string) => request<void>(`/backlog/${id}`, { method: 'DELETE' }),
+
+    listBuckets: () => request<BacklogBucket[]>('/backlog/buckets'),
+    createBucket: (name: string) =>
+      request<BacklogBucket>('/backlog/buckets', { method: 'POST', body: JSON.stringify({ name }) }),
+    updateBucket: (id: string, name: string) =>
+      request<BacklogBucket>(`/backlog/buckets/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+    deleteBucket: (id: string) => request<void>(`/backlog/buckets/${id}`, { method: 'DELETE' }),
   },
 
   assistant: {

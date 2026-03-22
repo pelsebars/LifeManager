@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { PlanningView } from './components/PlanningView/PlanningView';
 import { StandupView } from './components/Standup/StandupView';
 import { DayProfileSettings } from './components/Settings/DayProfileSettings';
+import { BacklogView } from './components/Backlog/BacklogView';
 import { LoginPage } from './components/Auth/LoginPage';
 import { NewProjectModal } from './components/PlanningView/NewProjectModal';
 import { usePlanningStore } from './store/planningStore';
 
-type View = 'planning' | 'standup' | 'settings';
+type View = 'planning' | 'standup' | 'settings' | 'backlog';
 
 export default function App() {
   const [authed, setAuthed]      = useState(() => !!localStorage.getItem('token') || !!localStorage.getItem('demoMode'));
@@ -39,6 +40,9 @@ export default function App() {
         <button onClick={() => setView('standup')} style={navBtn(view === 'standup')}>
           Daily Standup
         </button>
+        <button onClick={() => setView('backlog')} style={navBtn(view === 'backlog')}>
+          Backlog
+        </button>
         <button onClick={() => setView('settings')} style={navBtn(view === 'settings')}>
           Capacity
         </button>
@@ -65,6 +69,7 @@ export default function App() {
       <main style={{ flex: 1, overflow: 'hidden' }}>
         {view === 'planning' && <PlanningView />}
         {view === 'standup'  && <StandupView />}
+        {view === 'backlog'  && <div style={{ overflowY: 'auto', height: '100%' }}><BacklogView /></div>}
         {view === 'settings' && <div style={{ overflowY: 'auto', height: '100%' }}><DayProfileSettings /></div>}
       </main>
     </div>

@@ -108,6 +108,32 @@ export interface TodayTask extends Task {
   project_title: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Backlog (BL-45, BL-46, BL-47)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BacklogBucket {
+  id: string;
+  workspace_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BacklogItem {
+  id: string;
+  workspace_id: string;
+  owner_id: string;
+  bucket_id: string | null;
+  bucket_name: string | null;   // joined from backlog_buckets
+  title: string;
+  description?: string;
+  category: TaskCategory;
+  effort: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Slipped task with a proposed reschedule — returned by POST /api/assistant/standup */
 export interface SlippedTask {
   id: string;

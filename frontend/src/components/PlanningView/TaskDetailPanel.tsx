@@ -57,6 +57,8 @@ interface CreateProps {
   onSave?: never;
   onCreate: (data: NewTaskData) => void;
   onClose: () => void;
+  /** Pre-fill fields when activating a backlog item (BL-46) */
+  prefill?: { title?: string; category?: TaskCategory; effort?: number };
 }
 
 type Props = EditProps | CreateProps;
@@ -67,16 +69,17 @@ export function TaskDetailPanel(props: Props) {
   const isCreate = props.mode === 'create';
 
   // Form state
-  const [title, setTitle]         = useState(isCreate ? '' : props.task.title);
+  const prefill = isCreate ? (props as CreateProps).prefill : undefined;
+  const [title, setTitle]         = useState(isCreate ? (prefill?.title ?? '') : props.task.title);
   const [phaseId, setPhaseId]     = useState(isCreate ? (props.phases[props.phases.length - 1]?.id ?? '') : '');
   const [startDate, setStartDate] = useState(isCreate ? today : '');
-  const [effort, setEffort]       = useState(isCreate ? '1' : String(props.task.effort));
+  const [effort, setEffort]       = useState(isCreate ? String(prefill?.effort ?? 1) : String(props.task.effort));
   const [duration, setDuration]   = useState(isCreate ? '1' : String(props.task.duration_days));
   const [deadline, setDeadline]   = useState(isCreate ? '' : (props.task.deadline ?? ''));
   const [progress, setProgress]   = useState(isCreate ? 0 : props.task.progress_pct);
   const [status, setStatus]       = useState<Task['status']>(isCreate ? 'not_started' : props.task.status);
   const [isLocked, setIsLocked]   = useState(isCreate ? false : props.task.is_locked);
-  const [category, setCategory]   = useState<TaskCategory>(isCreate ? 'personal' : (props.task.category ?? 'personal'));
+  const [category, setCategory]   = useState<TaskCategory>(isCreate ? (prefill?.category ?? 'personal') : (props.task.category ?? 'personal'));
 
   // Dependency state — initialise from task in edit mode
   const [deps, setDeps]           = useState<string[]>(isCreate ? [] : props.task.dependencies ?? []);
