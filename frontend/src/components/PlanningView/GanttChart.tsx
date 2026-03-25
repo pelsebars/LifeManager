@@ -288,8 +288,8 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
               title: t.title,
               start_time: moment(t.start_date).valueOf(),
               end_time: moment(t.end_date).add(1, 'day').valueOf(),
-              canMove: !t.is_locked,
-              canResize: t.is_locked ? 'left' : 'both',
+              canMove: true,     // moveResizeValidator handles deadline constraint
+              canResize: 'both', // validator clamps right edge at deadline
             });
           });
         }
@@ -332,18 +332,24 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
       const task = taskById.get(idStr);
       if (!task || !task.is_locked || !task.deadline) return time;
 
-      const deadlineMs = moment(task.deadline).add(1, 'day').valueOf();
-
       if (action === 'move') {
-        const newEndMs = time + (task.duration_days - 1) * 86_400_000;
-        if (newEndMs >= deadlineMs) {
-          return deadlineMs - task.duration_days * 86_400_000;
+        // Compute what end_date would be if we move to this start time
+        const newStartDate = moment(time).format('YYYY-MM-DD');
+        const newEndDate   = moment(newStartDate).add(task.duration_days - 1, 'days').format('YYYY-MM-DD');
+        if (newEndDate > task.deadline) {
+          // Clamp: latest allowed start so that end_date = deadline
+          return moment(task.deadline)
+            .subtract(task.duration_days - 1, 'days')
+            .startOf('day')
+            .valueOf();
         }
       }
       if (action === 'resize' && edge === 'right') {
-        if (time > deadlineMs) {
-          setWarning(`"${task.title}" is locked — cannot extend past deadline ${task.deadline}`);
-          return deadlineMs;
+        // time is the right-edge pixel position; end_date = time - 1 day
+        const newEndDate = moment(time).subtract(1, 'day').format('YYYY-MM-DD');
+        if (newEndDate > task.deadline) {
+          setWarning(`"${task.title}" er låst — kan ikke forlænges forbi deadline ${task.deadline}`);
+          return moment(task.deadline).add(1, 'day').startOf('day').valueOf();
         }
       }
       return time;
