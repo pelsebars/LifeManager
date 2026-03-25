@@ -134,6 +134,30 @@ export interface BacklogItem {
   updated_at: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Backlog sharing
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BacklogShare {
+  id: string;
+  owner_workspace_id: string;
+  owner_user_id: string;
+  owner_email: string;
+  owner_workspace_name: string;
+  invitee_email: string;
+  invitee_workspace_id: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  updated_at: string;
+}
+
+/** A shared backlog as returned by GET /api/backlog/shared */
+export interface SharedBacklog {
+  share: BacklogShare;
+  buckets: BacklogBucket[];
+  items: BacklogItem[];
+}
+
 /** Slipped task with a proposed reschedule — returned by POST /api/assistant/standup */
 export interface SlippedTask {
   id: string;

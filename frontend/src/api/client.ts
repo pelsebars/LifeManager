@@ -1,4 +1,4 @@
-import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry, Routine, BacklogItem, BacklogBucket } from '../types';
+import type { Project, Phase, Task, TodayTask, SlippedTask, DayProfile, LoadEntry, Routine, BacklogItem, BacklogBucket, BacklogShare, SharedBacklog } from '../types';
 
 // In production VITE_API_URL points to Railway (e.g. https://xxx.up.railway.app)
 // In local dev it's empty and we fall back to /api (proxied by Vite)
@@ -98,6 +98,19 @@ export const api = {
     updateBucket: (id: string, name: string) =>
       request<BacklogBucket>(`/backlog/buckets/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
     deleteBucket: (id: string) => request<void>(`/backlog/buckets/${id}`, { method: 'DELETE' }),
+
+    // Sharing
+    invite: (email: string) =>
+      request<BacklogShare>('/backlog/shares', { method: 'POST', body: JSON.stringify({ email }) }),
+    pendingInvites: () => request<BacklogShare[]>('/backlog/shares/pending'),
+    myShares: () => request<BacklogShare[]>('/backlog/shares/mine'),
+    respondToInvite: (id: string, accept: boolean) =>
+      request<BacklogShare>(`/backlog/shares/${id}/respond`, { method: 'PUT', body: JSON.stringify({ accept }) }),
+    revokeShare: (id: string) => request<void>(`/backlog/shares/${id}`, { method: 'DELETE' }),
+    listShared: () => request<SharedBacklog[]>('/backlog/shared'),
+    createSharedItem: (sharedWorkspaceId: string, body: { title: string; description?: string; category?: string; effort?: number | null; bucket_id?: string | null }) =>
+      request<BacklogItem>('/backlog', { method: 'POST', body: JSON.stringify({ ...body, shared_workspace_id: sharedWorkspaceId }) }),
+    deleteSharedItem: (itemId: string) => request<void>(`/backlog/shared-item/${itemId}`, { method: 'DELETE' }),
   },
 
   assistant: {
