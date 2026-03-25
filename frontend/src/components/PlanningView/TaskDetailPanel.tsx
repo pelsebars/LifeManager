@@ -34,6 +34,7 @@ export type NewTaskData = {
   deadline: string | null;
   is_locked: boolean;
   dependencies: string[];
+  description: string | null;
 };
 
 interface EditProps {
@@ -80,6 +81,7 @@ export function TaskDetailPanel(props: Props) {
   const [status, setStatus]       = useState<Task['status']>(isCreate ? 'not_started' : props.task.status);
   const [isLocked, setIsLocked]   = useState(isCreate ? false : props.task.is_locked);
   const [category, setCategory]   = useState<TaskCategory>(isCreate ? (prefill?.category ?? 'personal') : (props.task.category ?? 'personal'));
+  const [notes, setNotes]         = useState(isCreate ? '' : (props.task.description ?? ''));
 
   // Dependency state — initialise from task in edit mode
   const [deps, setDeps]           = useState<string[]>(isCreate ? [] : props.task.dependencies ?? []);
@@ -96,6 +98,7 @@ export function TaskDetailPanel(props: Props) {
     setStatus(t.status);
     setIsLocked(t.is_locked);
     setCategory(t.category ?? 'personal');
+    setNotes(t.description ?? '');
     setDeps(t.dependencies ?? []);
     setPhaseId(t.phase_id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,6 +134,7 @@ export function TaskDetailPanel(props: Props) {
         deadline:      deadline || null,
         is_locked:     isLocked,
         dependencies:  deps,
+        description:   notes || null,
       });
     } else {
       const patch: Partial<Task> = {
@@ -143,6 +147,7 @@ export function TaskDetailPanel(props: Props) {
         status,
         is_locked:     isLocked,
         dependencies:  deps,
+        description:   notes || undefined,
       };
       if (phaseId !== props.task.phase_id) patch.phase_id = phaseId;
       props.onSave(props.task.id, patch);
@@ -226,6 +231,18 @@ export function TaskDetailPanel(props: Props) {
               onChange={(e) => { setTitle(e.target.value); }}
               placeholder={isCreate ? 'Task title…' : undefined}
               style={inputStyle}
+            />
+          </label>
+
+          {/* Notes */}
+          <label style={labelStyle}>
+            Notes
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add notes…"
+              rows={3}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'system-ui, sans-serif' }}
             />
           </label>
 
