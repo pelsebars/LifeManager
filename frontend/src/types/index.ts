@@ -112,12 +112,21 @@ export interface TodayTask extends Task {
 // Backlog (BL-45, BL-46, BL-47)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** A minimal share record embedded in a bucket (for the bucket list endpoint) */
+export interface BucketShareSummary {
+  id: string;
+  invitee_email: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  invitee_workspace_id: string | null;
+}
+
 export interface BacklogBucket {
   id: string;
   workspace_id: string;
   name: string;
   created_at: string;
   updated_at: string;
+  shares: BucketShareSummary[];  // shares I have created for this bucket
 }
 
 export interface BacklogItem {
@@ -140,6 +149,8 @@ export interface BacklogItem {
 
 export interface BacklogShare {
   id: string;
+  bucket_id: string;
+  bucket_name: string;           // joined from backlog_buckets
   owner_workspace_id: string;
   owner_user_id: string;
   owner_email: string;
@@ -151,10 +162,9 @@ export interface BacklogShare {
   updated_at: string;
 }
 
-/** A shared backlog as returned by GET /api/backlog/shared */
+/** A single shared bucket as returned by GET /api/backlog/shared */
 export interface SharedBacklog {
-  share: BacklogShare;
-  buckets: BacklogBucket[];
+  share: BacklogShare;   // includes bucket_id + bucket_name
   items: BacklogItem[];
 }
 

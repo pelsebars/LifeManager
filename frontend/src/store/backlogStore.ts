@@ -5,38 +5,36 @@ import type { BacklogItem, BacklogBucket, BacklogShare, SharedBacklog } from '..
 interface BacklogState {
   items:          BacklogItem[];
   buckets:        BacklogBucket[];
-  sharedBacklogs: SharedBacklog[];   // backlogs shared with me (accepted)
-  myShares:       BacklogShare[];    // shares I have sent
+  sharedBacklogs: SharedBacklog[];   // buckets shared with me (accepted)
   pendingInvites: BacklogShare[];    // invitations waiting for my response
   loading: boolean;
   error:   string | null;
 
-  fetchAll:           () => Promise<void>;
+  fetchAll:            () => Promise<void>;
   fetchPendingInvites: () => Promise<void>;
 
-  createItem:    (body: { title: string; description?: string; category?: string; effort?: number | null; bucket_id?: string | null }) => Promise<void>;
-  updateItem:    (id: string, patch: Partial<BacklogItem>) => Promise<void>;
-  deleteItem:    (id: string) => Promise<void>;
+  createItem:  (body: { title: string; description?: string; category?: string; effort?: number | null; bucket_id?: string | null }) => Promise<void>;
+  updateItem:  (id: string, patch: Partial<BacklogItem>) => Promise<void>;
+  deleteItem:  (id: string) => Promise<void>;
 
-  createBucket:  (name: string) => Promise<BacklogBucket>;
-  updateBucket:  (id: string, name: string) => Promise<void>;
-  deleteBucket:  (id: string) => Promise<void>;
+  createBucket: (name: string) => Promise<BacklogBucket>;
+  updateBucket: (id: string, name: string) => Promise<void>;
+  deleteBucket: (id: string) => Promise<void>;
 
-  // Sharing
-  invite:          (email: string) => Promise<void>;
-  revokeShare:     (id: string) => Promise<void>;
+  // Sharing (bucket level)
+  invite:          (bucketId: string, email: string) => Promise<void>;
+  revokeShare:     (shareId: string, bucketId: string) => Promise<void>;
   respondToInvite: (id: string, accept: boolean) => Promise<void>;
 
-  // Shared backlog actions
-  createSharedItem:   (sharedWorkspaceId: string, body: { title: string; description?: string; category?: string; effort?: number | null; bucket_id?: string | null }) => Promise<void>;
-  activateSharedItem: (itemId: string, sharedWorkspaceId: string) => Promise<BacklogItem>;
+  // Shared bucket item actions
+  createSharedItem:   (sharedBucketId: string, body: { title: string; description?: string; category?: string; effort?: number | null }) => Promise<void>;
+  activateSharedItem: (itemId: string, sharedBucketId: string) => Promise<BacklogItem>;
 }
 
 export const useBacklogStore = create<BacklogState>((set, get) => ({
   items:          [],
   buckets:        [],
   sharedBacklogs: [],
-  myShares:       [],
   pendingInvites: [],
   loading: false,
   error:   null,
@@ -44,13 +42,12 @@ export const useBacklogStore = create<BacklogState>((set, get) => ({
   fetchAll: async () => {
     set({ loading: true, error: null });
     try {
-      const [items, buckets, sharedBacklogs, myShares] = await Promise.all([
+      const [items, buckets, sharedBacklogs] = await Promise.all([
         api.backlog.listItems(),
         api.backlog.listBuckets(),
         api.backlog.listShared(),
-        api.backlog.myShares(),
       ]);
-      set({ items, buckets, sharedBacklogs, myShares });
+      set({ items, buckets, sharedBacklogs });
     } catch (e: unknown) {
       set({ error: e instanceof Error ? e.message : 'Failed to load backlog' });
     } finally {
@@ -90,54 +87,65 @@ export const useBacklogStore = create<BacklogState>((set, get) => ({
 
   updateBucket: async (id, name) => {
     const updated = await api.backlog.updateBucket(id, name);
-    set((s) => ({ buckets: s.buckets.map((b) => (b.id === id ? updated : b)) }));
+    set((s) => ({ buckets: s.buckets.map((b) => (b.id === id ? { ...b, ...updated } : b)) }));
   },
 
   deleteBucket: async (id) => {
     await api.backlog.deleteBucket(id);
     set((s) => ({
       buckets: s.buckets.filter((b) => b.id !== id),
-      items: s.items.map((i) => i.bucket_id === id ? { ...i, bucket_id: null, bucket_name: null } : i),
+      items:   s.items.map((i) => i.bucket_id === id ? { ...i, bucket_id: null, bucket_name: null } : i),
     }));
   },
 
   // ── Sharing ───────────────────────────────────────────────────────────────
 
-  invite: async (email) => {
-    const share = await api.backlog.invite(email);
-    set((s) => ({ myShares: [share, ...s.myShares.filter((sh) => sh.id !== share.id)] }));
+  invite: async (bucketId, email) => {
+    const share = await api.backlog.invite(bucketId, email);
+    // Optimistically add the share to the relevant bucket's shares list
+    set((s) => ({
+      buckets: s.buckets.map((b) =>
+        b.id === bucketId
+          ? { ...b, shares: [...(b.shares ?? []).filter((sh) => sh.id !== share.id), { id: share.id, invitee_email: share.invitee_email, status: share.status, invitee_workspace_id: share.invitee_workspace_id }] }
+          : b,
+      ),
+    }));
   },
 
-  revokeShare: async (id) => {
-    await api.backlog.revokeShare(id);
-    set((s) => ({ myShares: s.myShares.filter((sh) => sh.id !== id) }));
+  revokeShare: async (shareId, bucketId) => {
+    await api.backlog.revokeShare(shareId);
+    set((s) => ({
+      buckets: s.buckets.map((b) =>
+        b.id === bucketId
+          ? { ...b, shares: (b.shares ?? []).filter((sh) => sh.id !== shareId) }
+          : b,
+      ),
+    }));
   },
 
   respondToInvite: async (id, accept) => {
     await api.backlog.respondToInvite(id, accept);
     set((s) => ({ pendingInvites: s.pendingInvites.filter((inv) => inv.id !== id) }));
     if (accept) {
-      // Refresh to pull in the newly shared backlog
       await get().fetchAll();
     }
   },
 
-  // ── Shared backlog item actions ───────────────────────────────────────────
+  // ── Shared bucket item actions ────────────────────────────────────────────
 
-  createSharedItem: async (sharedWorkspaceId, body) => {
-    const item = await api.backlog.createSharedItem(sharedWorkspaceId, body);
+  createSharedItem: async (sharedBucketId, body) => {
+    const item = await api.backlog.createSharedItem(sharedBucketId, body);
     set((s) => ({
       sharedBacklogs: s.sharedBacklogs.map((sb) =>
-        sb.share.owner_workspace_id === sharedWorkspaceId
+        sb.share.bucket_id === sharedBucketId
           ? { ...sb, items: [item, ...sb.items] }
           : sb,
       ),
     }));
   },
 
-  // Returns item data for pre-filling the task create modal, then deletes it from shared backlog
-  activateSharedItem: async (itemId, sharedWorkspaceId) => {
-    const sb = get().sharedBacklogs.find((b) => b.share.owner_workspace_id === sharedWorkspaceId);
+  activateSharedItem: async (itemId, sharedBucketId) => {
+    const sb   = get().sharedBacklogs.find((b) => b.share.bucket_id === sharedBucketId);
     const item = sb?.items.find((i) => i.id === itemId);
     if (!item) throw new Error('Item not found');
 
@@ -145,7 +153,7 @@ export const useBacklogStore = create<BacklogState>((set, get) => ({
 
     set((s) => ({
       sharedBacklogs: s.sharedBacklogs.map((b) =>
-        b.share.owner_workspace_id === sharedWorkspaceId
+        b.share.bucket_id === sharedBucketId
           ? { ...b, items: b.items.filter((i) => i.id !== itemId) }
           : b,
       ),

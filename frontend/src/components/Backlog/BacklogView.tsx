@@ -1,16 +1,16 @@
 /**
- * BacklogView — BL-45, BL-46, BL-47 + sharing
+ * BacklogView — BL-45, BL-46, BL-47 + bucket-level sharing
  *
  * BL-45: A dedicated backlog view where items can be added freely
  * BL-46: "Activate as task" opens the normal TaskDetailPanel in create mode
  * BL-47: Items are grouped by named buckets; uncategorised items live in "Inbox"
- * Sharing: invite by email, view shared backlogs, add/activate items in shared backlogs
+ * Sharing: each bucket can be shared individually with specific people
  */
 
 import { useEffect, useState } from 'react';
 import { useBacklogStore } from '../../store/backlogStore';
 import { usePlanningStore } from '../../store/planningStore';
-import type { BacklogItem, BacklogBucket, BacklogShare, SharedBacklog, TaskCategory } from '../../types';
+import type { BacklogItem, BacklogBucket, BucketShareSummary, SharedBacklog, TaskCategory } from '../../types';
 import { TaskDetailPanel } from '../PlanningView/TaskDetailPanel';
 import type { NewTaskData, TaskOptionGroup } from '../PlanningView/TaskDetailPanel';
 
@@ -119,19 +119,26 @@ function BucketModal({ existing, onSave, onClose }: { existing?: BacklogBucket; 
   );
 }
 
-// ─── invite modal ─────────────────────────────────────────────────────────────
+// ─── bucket share modal ───────────────────────────────────────────────────────
 
-function InviteModal({ onSave, onClose }: { onSave: (email: string) => Promise<void>; onClose: () => void }) {
-  const [email,   setEmail]   = useState('');
-  const [saving,  setSaving]  = useState(false);
-  const [errMsg,  setErrMsg]  = useState('');
+interface BucketShareModalProps {
+  bucket:   BacklogBucket;
+  onInvite: (bucketId: string, email: string) => Promise<void>;
+  onRevoke: (shareId: string, bucketId: string) => Promise<void>;
+  onClose:  () => void;
+}
+
+function BucketShareModal({ bucket, onInvite, onRevoke, onClose }: BucketShareModalProps) {
+  const [email,  setEmail]  = useState('');
+  const [saving, setSaving] = useState(false);
+  const [errMsg, setErrMsg] = useState('');
 
   const submit = async () => {
     if (!email.trim()) return;
     setSaving(true); setErrMsg('');
     try {
-      await onSave(email.trim().toLowerCase());
-      onClose();
+      await onInvite(bucket.id, email.trim().toLowerCase());
+      setEmail('');
     } catch (e: unknown) {
       setErrMsg(e instanceof Error ? e.message : 'Failed to invite');
     } finally {
@@ -139,98 +146,136 @@ function InviteModal({ onSave, onClose }: { onSave: (email: string) => Promise<v
     }
   };
 
+  const shares = bucket.shares ?? [];
+
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.15)' }} />
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 1000, width: 380, background: 'white', borderRadius: 10, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', padding: 20, fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#222' }}>🔗 Share your backlog</div>
-        <div style={{ fontSize: 12, color: '#666' }}>
-          Enter the email of the person you want to share with. They'll get a notification next time they log in.
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 1000, width: 400, background: 'white', borderRadius: 10, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', fontFamily: 'system-ui, sans-serif', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa', borderRadius: '10px 10px 0 0' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#222', flex: 1 }}>🔗 Share bucket: {bucket.name}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#888', lineHeight: 1 }}>×</button>
         </div>
-        <label style={labelStyle}>
-          Email address
-          <input autoFocus type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} placeholder="someone@example.com" style={inputStyle} />
-        </label>
-        {errMsg && <div style={{ fontSize: 12, color: '#dc2626' }}>{errMsg}</div>}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={submit} disabled={saving || !email.trim()} style={{ flex: 1, padding: '8px 0', borderRadius: 6, border: 'none', background: email.trim() && !saving ? '#4a9eff' : '#d0e8ff', color: email.trim() && !saving ? 'white' : '#8ab8e0', fontWeight: 600, fontSize: 13, cursor: email.trim() && !saving ? 'pointer' : 'default' }}>
-            {saving ? 'Sending…' : 'Send invite'}
-          </button>
-          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ddd', background: 'white', color: '#555', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Current shares */}
+          {shares.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Shared with</div>
+              {shares.map((s) => (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f5f5f5' }}>
+                  <span style={{ flex: 1, fontSize: 13, color: '#333' }}>{s.invitee_email}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 10,
+                    background: s.status === 'accepted' ? '#dcfce7' : s.status === 'rejected' ? '#fee2e2' : '#fef9c3',
+                    color:      s.status === 'accepted' ? '#166534' : s.status === 'rejected' ? '#991b1b' : '#854d0e',
+                  }}>{s.status.toUpperCase()}</span>
+                  <button onClick={() => onRevoke(s.id, bucket.id)} style={{ ...iconBtn, color: '#dc2626', fontSize: 13 }} title="Revoke">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Invite new */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Invite someone</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="email" autoFocus value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                placeholder="someone@example.com"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button onClick={submit} disabled={saving || !email.trim()} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: email.trim() && !saving ? '#4a9eff' : '#d0e8ff', color: email.trim() && !saving ? 'white' : '#8ab8e0', fontWeight: 600, fontSize: 13, cursor: email.trim() && !saving ? 'pointer' : 'default', whiteSpace: 'nowrap' }}>
+                {saving ? '…' : 'Invite'}
+              </button>
+            </div>
+            {errMsg && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{errMsg}</div>}
+            <div style={{ fontSize: 11, color: '#aaa', marginTop: 6 }}>
+              They'll see a notification next time they log in.
+            </div>
+          </div>
         </div>
       </div>
     </>
   );
 }
 
-// ─── shared backlog section ────────────────────────────────────────────────────
+// ─── pending invite popup ─────────────────────────────────────────────────────
 
-interface SharedSectionProps {
-  shared:     SharedBacklog;
-  allPhases:  import('../../types').Phase[];
-  taskOptionGroups: TaskOptionGroup[];
-  onActivate: (item: BacklogItem, sharedWorkspaceId: string) => void;
-  onAddItem:  (sharedWorkspaceId: string, defaultBucketId: string | null) => void;
+export function PendingInvitePopup({ invites, onRespond }: { invites: import('../../types').BacklogShare[]; onRespond: (id: string, accept: boolean) => Promise<void> }) {
+  const [idx, setIdx] = useState(0);
+  const invite = invites[idx];
+  if (!invite) return null;
+
+  const handle = async (accept: boolean) => {
+    await onRespond(invite.id, accept);
+    if (idx >= invites.length - 1) setIdx(0);
+  };
+
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.3)' }} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 9999, width: 400, background: 'white', borderRadius: 12, boxShadow: '0 12px 48px rgba(0,0,0,0.22)', fontFamily: 'system-ui, sans-serif', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', background: '#1a1a2e', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🔗</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>Backlog deling — invitation</span>
+          {invites.length > 1 && (
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#888', background: '#2a2a3e', padding: '2px 8px', borderRadius: 10 }}>{idx + 1} / {invites.length}</span>
+          )}
+        </div>
+        <div style={{ padding: 24 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a2e', marginBottom: 8 }}>
+            {invite.owner_email} vil gerne dele en bucket med dig
+          </div>
+          <div style={{ fontSize: 13, color: '#444', marginBottom: 4 }}>
+            Bucket: <strong>🗂 {invite.bucket_name}</strong>
+          </div>
+          <div style={{ fontSize: 12, color: '#888', lineHeight: 1.5 }}>
+            Accepterer du, kan du se og bidrage til denne bucket — og aktivere items som tasks på dit eget Gantt.
+          </div>
+        </div>
+        <div style={{ padding: '12px 24px 20px', display: 'flex', gap: 10 }}>
+          <button onClick={() => handle(true)}  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#22c55e', color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>✓ Ja, accepter</button>
+          <button onClick={() => handle(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #e0e0e0', background: 'white', color: '#888', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Nej tak</button>
+        </div>
+      </div>
+    </>
+  );
 }
 
-function SharedBacklogSection({ shared, onActivate, onAddItem }: SharedSectionProps) {
-  const [collapsed, setCollapsed] = useState(false);
-  const { share, buckets, items } = shared;
+// ─── shared bucket section ────────────────────────────────────────────────────
 
-  const inbox   = items.filter((i) => !i.bucket_id);
-  const grouped = buckets.map((b) => ({ bucket: b, items: items.filter((i) => i.bucket_id === b.id) }));
+function SharedBucketSection({ shared, onActivate, onAddItem }: {
+  shared:    SharedBacklog;
+  onActivate: (item: BacklogItem, bucketId: string) => void;
+  onAddItem:  (bucketId: string) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const { share, items } = shared;
 
   return (
     <div style={{ background: 'white', borderRadius: 10, border: '2px solid #d1fae5', overflow: 'hidden' }}>
-      {/* Header */}
       <div style={{ padding: '10px 14px', background: '#f0fdf4', display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={() => setCollapsed(!collapsed)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#666', padding: 0 }}>
           {collapsed ? '▶' : '▼'}
         </button>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#166534', flex: 1 }}>
-          🔗 {share.owner_workspace_name}'s backlog
+          🗂 {share.bucket_name}
         </span>
-        <span style={{ fontSize: 11, color: '#6b7280' }}>shared by {share.owner_email}</span>
+        <span style={{ fontSize: 11, color: '#6b7280' }}>fra {share.owner_email}</span>
         <span style={{ fontSize: 11, color: '#aaa', background: '#f0f0f0', borderRadius: 10, padding: '1px 7px' }}>{items.length}</span>
-        <button onClick={() => onAddItem(share.owner_workspace_id, null)} style={{ ...ghostBtn, fontSize: 11, padding: '3px 8px', borderColor: '#16a34a', color: '#16a34a' }}>+ Add</button>
+        <button onClick={() => onAddItem(share.bucket_id)} style={{ ...ghostBtn, fontSize: 11, padding: '3px 8px', borderColor: '#16a34a', color: '#16a34a' }}>+ Add</button>
       </div>
-
       {!collapsed && (
         <div>
-          {/* Buckets */}
-          {grouped.map(({ bucket, items: bItems }) => (
-            <div key={bucket.id}>
-              <div style={{ padding: '8px 14px', background: '#f8fffe', borderTop: '1px solid #d1fae5', fontSize: 12, fontWeight: 700, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                🗂 {bucket.name}
-                <span style={{ fontSize: 11, color: '#aaa', background: '#f0f0f0', borderRadius: 10, padding: '1px 6px', fontWeight: 400 }}>{bItems.length}</span>
-                <button onClick={() => onAddItem(share.owner_workspace_id, bucket.id)} style={{ ...ghostBtn, fontSize: 10, padding: '2px 6px', marginLeft: 'auto', borderColor: '#16a34a', color: '#16a34a' }}>+ Add</button>
-              </div>
-              {bItems.length === 0
-                ? <div style={{ padding: '10px 14px', fontSize: 12, color: '#bbb', fontStyle: 'italic' }}>No items</div>
-                : bItems.map((item) => (
-                    <SharedItemRow key={item.id} item={item} onActivate={() => onActivate(item, share.owner_workspace_id)} />
-                  ))
-              }
-            </div>
-          ))}
-
-          {/* Inbox */}
-          {(inbox.length > 0 || buckets.length === 0) && (
-            <>
-              {buckets.length > 0 && (
-                <div style={{ padding: '8px 14px', background: '#f8fffe', borderTop: '1px solid #d1fae5', fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  📥 Inbox
-                  <span style={{ fontSize: 11, color: '#aaa', background: '#f0f0f0', borderRadius: 10, padding: '1px 6px', fontWeight: 400 }}>{inbox.length}</span>
-                </div>
-              )}
-              {inbox.length === 0
-                ? <div style={{ padding: '14px', fontSize: 12, color: '#bbb', fontStyle: 'italic' }}>No items yet</div>
-                : inbox.map((item) => (
-                    <SharedItemRow key={item.id} item={item} onActivate={() => onActivate(item, share.owner_workspace_id)} />
-                  ))
-              }
-            </>
-          )}
+          {items.length === 0
+            ? <div style={{ padding: '14px', fontSize: 12, color: '#bbb', fontStyle: 'italic' }}>No items yet</div>
+            : items.map((item) => (
+                <SharedItemRow key={item.id} item={item} onActivate={() => onActivate(item, share.bucket_id)} />
+              ))
+          }
         </div>
       )}
     </div>
@@ -255,32 +300,9 @@ function SharedItemRow({ item, onActivate }: { item: BacklogItem; onActivate: ()
       {item.effort != null && (
         <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', borderRadius: 4, padding: '2px 6px', flexShrink: 0, marginTop: 2 }}>{item.effort}h</span>
       )}
-      <button onClick={onActivate} title="Take this item and activate as task" style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid #16a34a', background: 'white', color: '#16a34a', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
+      <button onClick={onActivate} title="Take this item and activate as task" style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid #16a34a', background: 'white', color: '#16a34a', cursor: 'pointer', fontWeight: 600, flexShrink: 0, marginTop: 1 }}>
         → Take
       </button>
-    </div>
-  );
-}
-
-// ─── my shares panel ──────────────────────────────────────────────────────────
-
-function MySharesPanel({ shares, onRevoke }: { shares: BacklogShare[]; onRevoke: (id: string) => void }) {
-  if (shares.length === 0) return null;
-  return (
-    <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e8e8e8', overflow: 'hidden' }}>
-      <div style={{ padding: '10px 14px', background: '#fafafa', borderBottom: '1px solid #e8e8e8', fontSize: 12, fontWeight: 700, color: '#888', display: 'flex', alignItems: 'center', gap: 6 }}>
-        🔗 Shared with
-      </div>
-      {shares.map((s) => (
-        <div key={s.id} style={{ padding: '8px 14px', borderBottom: '1px solid #f5f5f5', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-          <span style={{ flex: 1, color: '#444' }}>{s.invitee_email}</span>
-          <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 10, fontWeight: 600,
-            background: s.status === 'accepted' ? '#dcfce7' : s.status === 'rejected' ? '#fee2e2' : '#fef9c3',
-            color:      s.status === 'accepted' ? '#166534' : s.status === 'rejected' ? '#991b1b' : '#854d0e',
-          }}>{s.status}</span>
-          <button onClick={() => onRevoke(s.id)} style={{ ...iconBtn, color: '#dc2626' }} title="Revoke">✕</button>
-        </div>
-      ))}
     </div>
   );
 }
@@ -289,7 +311,7 @@ function MySharesPanel({ shares, onRevoke }: { shares: BacklogShare[]; onRevoke:
 
 export function BacklogView() {
   const {
-    items, buckets, sharedBacklogs, myShares,
+    items, buckets, sharedBacklogs,
     loading, error,
     fetchAll, createItem, updateItem, deleteItem,
     createBucket, updateBucket, deleteBucket,
@@ -298,9 +320,9 @@ export function BacklogView() {
   } = useBacklogStore();
   const { projects, phases, tasks, createTask } = usePlanningStore();
 
-  const [showItemModal,   setShowItemModal]   = useState<{ open: boolean; item?: BacklogItem; defaultBucketId?: string | null; sharedWorkspaceId?: string }>({ open: false });
+  const [showItemModal,   setShowItemModal]   = useState<{ open: boolean; item?: BacklogItem; defaultBucketId?: string | null; sharedBucketId?: string }>({ open: false });
   const [showBucketModal, setShowBucketModal] = useState<{ open: boolean; bucket?: BacklogBucket }>({ open: false });
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [shareModal,      setShareModal]      = useState<BacklogBucket | null>(null);
   const [activating,      setActivating]      = useState<BacklogItem | null>(null);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -318,8 +340,8 @@ export function BacklogView() {
   const grouped   = buckets.map((b) => ({ bucket: b, items: items.filter((i) => i.bucket_id === b.id) }));
 
   const handleSaveItem = async (data: Parameters<typeof createItem>[0]) => {
-    if (showItemModal.sharedWorkspaceId) {
-      await createSharedItem(showItemModal.sharedWorkspaceId, { ...data, bucket_id: data.bucket_id ?? showItemModal.defaultBucketId ?? null });
+    if (showItemModal.sharedBucketId) {
+      await createSharedItem(showItemModal.sharedBucketId, data);
     } else if (showItemModal.item) {
       await updateItem(showItemModal.item.id, data as Partial<BacklogItem>);
     } else {
@@ -344,22 +366,15 @@ export function BacklogView() {
     await deleteBucket(id);
   };
 
-  // Activate own backlog item
   const handleActivate = async (data: NewTaskData) => {
     await createTask(data);
     if (activating) await deleteItem(activating.id);
     setActivating(null);
   };
 
-  // Activate shared backlog item (take + open task create modal)
-  const handleActivateShared = async (item: BacklogItem, sharedWorkspaceId: string) => {
-    const prefillItem = await activateSharedItem(item.id, sharedWorkspaceId);
+  const handleActivateShared = async (item: BacklogItem, bucketId: string) => {
+    const prefillItem = await activateSharedItem(item.id, bucketId);
     setActivating(prefillItem);
-  };
-
-  const handleRevoke = async (id: string) => {
-    if (!window.confirm('Stop sharing your backlog with this person?')) return;
-    await revokeShare(id);
   };
 
   if (loading) return <div style={{ padding: 40, color: '#888', fontFamily: 'system-ui' }}>Loading backlog…</div>;
@@ -369,13 +384,10 @@ export function BacklogView() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, sans-serif', background: '#f8fafc' }}>
 
       {/* Toolbar */}
-      <div style={{ padding: '12px 20px', background: 'white', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div>
-          <span style={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e' }}>Backlog</span>
-          <span style={{ marginLeft: 8, fontSize: 12, color: '#888', background: '#f0f0f0', borderRadius: 10, padding: '2px 8px' }}>{items.length}</span>
-        </div>
+      <div style={{ padding: '12px 20px', background: 'white', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e' }}>Backlog</span>
+        <span style={{ fontSize: 12, color: '#888', background: '#f0f0f0', borderRadius: 10, padding: '2px 8px' }}>{items.length}</span>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setShowInviteModal(true)} style={ghostBtn} title="Share your backlog with someone">🔗 Share</button>
         <button onClick={() => setShowBucketModal({ open: true })} style={ghostBtn}>+ New bucket</button>
         <button onClick={() => setShowItemModal({ open: true })} style={primaryBtn}>+ Add item</button>
       </div>
@@ -383,10 +395,6 @@ export function BacklogView() {
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {/* My shares (who I've invited) */}
-        <MySharesPanel shares={myShares} onRevoke={handleRevoke} />
-
-        {/* Own backlog */}
         {items.length === 0 && sharedBacklogs.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 0', color: '#aaa' }}>
             <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
@@ -395,7 +403,7 @@ export function BacklogView() {
           </div>
         )}
 
-        {/* Buckets (BL-47) */}
+        {/* Own buckets (BL-47) */}
         {grouped.map(({ bucket, items: bItems }) => (
           <BucketSection key={bucket.id} bucket={bucket} items={bItems}
             onAddItem={() => setShowItemModal({ open: true, defaultBucketId: bucket.id })}
@@ -404,6 +412,7 @@ export function BacklogView() {
             onActivate={setActivating}
             onRenameBucket={() => setShowBucketModal({ open: true, bucket })}
             onDeleteBucket={() => handleDeleteBucket(bucket.id)}
+            onShareBucket={() => setShareModal(bucket)}
           />
         ))}
 
@@ -417,15 +426,13 @@ export function BacklogView() {
           />
         )}
 
-        {/* Shared backlogs from others */}
+        {/* Shared buckets from others */}
         {sharedBacklogs.map((sb) => (
-          <SharedBacklogSection
+          <SharedBucketSection
             key={sb.share.id}
             shared={sb}
-            allPhases={allPhases}
-            taskOptionGroups={taskOptionGroups}
             onActivate={handleActivateShared}
-            onAddItem={(wsId, bucketId) => setShowItemModal({ open: true, sharedWorkspaceId: wsId, defaultBucketId: bucketId })}
+            onAddItem={(bucketId) => setShowItemModal({ open: true, sharedBucketId: bucketId })}
           />
         ))}
       </div>
@@ -433,10 +440,7 @@ export function BacklogView() {
       {/* Modals */}
       {showItemModal.open && (
         <ItemModal
-          buckets={showItemModal.sharedWorkspaceId
-            ? (sharedBacklogs.find((sb) => sb.share.owner_workspace_id === showItemModal.sharedWorkspaceId)?.buckets ?? [])
-            : buckets
-          }
+          buckets={buckets}
           item={showItemModal.item}
           defaultBucketId={showItemModal.defaultBucketId}
           onSave={handleSaveItem}
@@ -446,8 +450,13 @@ export function BacklogView() {
       {showBucketModal.open && (
         <BucketModal existing={showBucketModal.bucket} onSave={handleSaveBucket} onClose={() => setShowBucketModal({ open: false })} />
       )}
-      {showInviteModal && (
-        <InviteModal onSave={invite} onClose={() => setShowInviteModal(false)} />
+      {shareModal && (
+        <BucketShareModal
+          bucket={shareModal}
+          onInvite={invite}
+          onRevoke={revokeShare}
+          onClose={() => setShareModal(null)}
+        />
       )}
 
       {/* BL-46: TaskDetailPanel for activating a backlog item as a real task */}
@@ -476,10 +485,13 @@ interface BucketSectionProps {
   onActivate:      (item: BacklogItem) => void;
   onRenameBucket?: () => void;
   onDeleteBucket?: () => void;
+  onShareBucket?:  () => void;
 }
 
-function BucketSection({ bucket, items, onAddItem, onEditItem, onDeleteItem, onActivate, onRenameBucket, onDeleteBucket }: BucketSectionProps) {
+function BucketSection({ bucket, items, onAddItem, onEditItem, onDeleteItem, onActivate, onRenameBucket, onDeleteBucket, onShareBucket }: BucketSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const shareCount = bucket?.shares?.filter((s) => s.status === 'accepted').length ?? 0;
+
   return (
     <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e8e8e8', overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px', background: bucket ? '#f0f7ff' : '#fafafa', borderBottom: collapsed ? 'none' : '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -492,6 +504,13 @@ function BucketSection({ bucket, items, onAddItem, onEditItem, onDeleteItem, onA
         <span style={{ fontSize: 11, color: '#aaa', background: '#f0f0f0', borderRadius: 10, padding: '1px 7px' }}>{items.length}</span>
         {bucket && (
           <>
+            {/* Share indicator */}
+            {shareCount > 0 && (
+              <span title={`Shared with ${shareCount} person(s)`} style={{ fontSize: 11, color: '#16a34a', background: '#dcfce7', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>
+                🔗 {shareCount}
+              </span>
+            )}
+            <button onClick={onShareBucket} style={{ ...iconBtn, fontSize: 13 }} title="Share bucket">🔗</button>
             <button onClick={onRenameBucket} style={iconBtn} title="Rename">✏️</button>
             <button onClick={onDeleteBucket} style={iconBtn} title="Delete bucket">🗑</button>
           </>
@@ -554,3 +573,6 @@ const inputStyle: React.CSSProperties  = { padding: '6px 8px', borderRadius: 5, 
 const primaryBtn: React.CSSProperties  = { background: '#4a9eff', color: 'white', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 };
 const ghostBtn: React.CSSProperties    = { background: 'white', color: '#4a9eff', border: '1px solid #4a9eff', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600 };
 const iconBtn: React.CSSProperties     = { background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '2px 4px', borderRadius: 4, lineHeight: 1 };
+
+// Re-export for App.tsx
+export type { BucketShareSummary };

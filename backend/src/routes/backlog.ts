@@ -12,7 +12,21 @@ backlogRouter.use(requireAuth);
 // GET /api/backlog/buckets
 backlogRouter.get('/buckets', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT * FROM backlog_buckets WHERE workspace_id = $1 ORDER BY created_at`,
+    `SELECT bb.*,
+            COALESCE(
+              json_agg(
+                json_build_object(
+                  'id', bs.id, 'invitee_email', bs.invitee_email,
+                  'status', bs.status, 'invitee_workspace_id', bs.invitee_workspace_id
+                )
+              ) FILTER (WHERE bs.id IS NOT NULL),
+              '[]'
+            ) AS shares
+     FROM backlog_buckets bb
+     LEFT JOIN backlog_shares bs ON bs.bucket_id = bb.id
+     WHERE bb.workspace_id = $1
+     GROUP BY bb.id
+     ORDER BY bb.created_at`,
     [req.auth!.workspaceId],
   );
   res.json(rows);
@@ -23,7 +37,7 @@ backlogRouter.post('/buckets', async (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) { res.status(400).json({ error: 'name required' }); return; }
   const { rows: [bucket] } = await pool.query(
-    `INSERT INTO backlog_buckets (workspace_id, name) VALUES ($1, $2) RETURNING *`,
+    `INSERT INTO backlog_buckets (workspace_id, name) VALUES ($1, $2) RETURNING *, '[]'::json AS shares`,
     [req.auth!.workspaceId, name.trim()],
   );
   res.status(201).json(bucket);
@@ -51,15 +65,24 @@ backlogRouter.delete('/buckets/:id', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sharing
+// Sharing (bucket level)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// POST /api/backlog/shares  — invite someone by email
+// POST /api/backlog/shares  — share a specific bucket with someone by email
 backlogRouter.post('/shares', async (req, res) => {
-  const { email } = req.body;
-  if (!email?.trim()) { res.status(400).json({ error: 'email required' }); return; }
+  const { bucket_id, email } = req.body;
+  if (!bucket_id || !email?.trim()) {
+    res.status(400).json({ error: 'bucket_id and email required' }); return;
+  }
 
-  // Look up whether the invitee already has an account
+  // Verify the bucket belongs to the current workspace
+  const { rows: [bucket] } = await pool.query(
+    `SELECT id FROM backlog_buckets WHERE id = $1 AND workspace_id = $2`,
+    [bucket_id, req.auth!.workspaceId],
+  );
+  if (!bucket) { res.status(404).json({ error: 'Bucket not found' }); return; }
+
+  // Look up the invitee
   const { rows: [invitee] } = await pool.query(
     `SELECT id, workspace_id FROM users WHERE email = $1`,
     [email.trim().toLowerCase()],
@@ -73,12 +96,13 @@ backlogRouter.post('/shares', async (req, res) => {
   try {
     const { rows: [share] } = await pool.query(
       `INSERT INTO backlog_shares
-         (owner_workspace_id, owner_user_id, invitee_email, invitee_workspace_id, status)
-       VALUES ($1, $2, $3, $4, 'pending')
-       ON CONFLICT (owner_workspace_id, invitee_email)
+         (bucket_id, owner_workspace_id, owner_user_id, invitee_email, invitee_workspace_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'pending')
+       ON CONFLICT (bucket_id, invitee_email)
          DO UPDATE SET status = 'pending', updated_at = NOW()
        RETURNING *`,
       [
+        bucket_id,
         req.auth!.workspaceId,
         req.auth!.userId,
         email.trim().toLowerCase(),
@@ -91,9 +115,8 @@ backlogRouter.post('/shares', async (req, res) => {
   }
 });
 
-// GET /api/backlog/shares/pending  — invitations waiting for ME to respond
+// GET /api/backlog/shares/pending  — bucket invitations waiting for ME
 backlogRouter.get('/shares/pending', async (req, res) => {
-  // Find the current user's email
   const { rows: [me] } = await pool.query(
     `SELECT email FROM users WHERE id = $1`,
     [req.auth!.userId],
@@ -101,8 +124,10 @@ backlogRouter.get('/shares/pending', async (req, res) => {
   if (!me) { res.status(404).json({ error: 'User not found' }); return; }
 
   const { rows } = await pool.query(
-    `SELECT bs.*, w.name AS owner_workspace_name, u.email AS owner_email
+    `SELECT bs.*, bb.name AS bucket_name,
+            w.name AS owner_workspace_name, u.email AS owner_email
      FROM backlog_shares bs
+     JOIN backlog_buckets bb ON bb.id = bs.bucket_id
      JOIN workspaces w ON w.id = bs.owner_workspace_id
      JOIN users u ON u.id = bs.owner_user_id
      WHERE bs.invitee_email = $1
@@ -141,15 +166,16 @@ backlogRouter.put('/shares/:id/respond', async (req, res) => {
   res.json(share);
 });
 
-// GET /api/backlog/shared  — all backlogs shared with me (accepted)
+// GET /api/backlog/shared  — all buckets shared with me (accepted)
 backlogRouter.get('/shared', async (req, res) => {
-  // Find accepted shares where I am the invitee
   const { rows: shares } = await pool.query(
-    `SELECT bs.id, bs.owner_workspace_id, bs.owner_user_id,
+    `SELECT bs.id, bs.bucket_id, bs.owner_workspace_id, bs.owner_user_id,
             bs.invitee_email, bs.invitee_workspace_id, bs.status,
             bs.created_at, bs.updated_at,
+            bb.name AS bucket_name,
             w.name AS owner_workspace_name, u.email AS owner_email
      FROM backlog_shares bs
+     JOIN backlog_buckets bb ON bb.id = bs.bucket_id
      JOIN workspaces w ON w.id = bs.owner_workspace_id
      JOIN users u ON u.id = bs.owner_user_id
      WHERE bs.invitee_workspace_id = $1
@@ -157,60 +183,52 @@ backlogRouter.get('/shared', async (req, res) => {
     [req.auth!.workspaceId],
   );
 
-  // For each shared workspace, fetch their buckets and items
+  // For each shared bucket, fetch its items
   const results = await Promise.all(shares.map(async (share) => {
-    const [{ rows: buckets }, { rows: items }] = await Promise.all([
-      pool.query(
-        `SELECT * FROM backlog_buckets WHERE workspace_id = $1 ORDER BY created_at`,
-        [share.owner_workspace_id],
-      ),
-      pool.query(
-        `SELECT bi.*, bb.name AS bucket_name
-         FROM backlog_items bi
-         LEFT JOIN backlog_buckets bb ON bb.id = bi.bucket_id
-         WHERE bi.workspace_id = $1
-         ORDER BY bi.created_at DESC`,
-        [share.owner_workspace_id],
-      ),
-    ]);
-    return { share, buckets, items };
+    const { rows: items } = await pool.query(
+      `SELECT bi.*, bb.name AS bucket_name
+       FROM backlog_items bi
+       LEFT JOIN backlog_buckets bb ON bb.id = bi.bucket_id
+       WHERE bi.bucket_id = $1
+       ORDER BY bi.created_at DESC`,
+      [share.bucket_id],
+    );
+    return { share, items };
   }));
 
   res.json(results);
 });
 
-// DELETE /api/backlog/shared-item/:itemId  — remove item from a shared backlog (activate)
-// Only allowed if the current user has an accepted share from the item's owner
+// DELETE /api/backlog/shared-item/:itemId  — remove item from a shared bucket (activate)
 backlogRouter.delete('/shared-item/:itemId', async (req, res) => {
-  // Verify the item exists and find its workspace
   const { rows: [item] } = await pool.query(
     `SELECT * FROM backlog_items WHERE id = $1`,
     [req.params.itemId],
   );
   if (!item) { res.status(404).json({ error: 'Item not found' }); return; }
 
-  // Check the current user has accepted access to that workspace's backlog
+  // Verify current user has accepted access to this specific bucket
   const { rows: [share] } = await pool.query(
     `SELECT id FROM backlog_shares
-     WHERE owner_workspace_id = $1
+     WHERE bucket_id = $1
        AND invitee_workspace_id = $2
        AND status = 'accepted'`,
-    [item.workspace_id, req.auth!.workspaceId],
+    [item.bucket_id, req.auth!.workspaceId],
   );
-  if (!share) { res.status(403).json({ error: 'No access to this backlog' }); return; }
+  if (!share) { res.status(403).json({ error: 'No access to this bucket' }); return; }
 
   await pool.query(`DELETE FROM backlog_items WHERE id = $1`, [req.params.itemId]);
   res.status(204).send();
 });
 
-// GET /api/backlog/shares/mine  — shares I have sent (so I can see who I've invited)
+// GET /api/backlog/shares/mine  — shares I have sent
 backlogRouter.get('/shares/mine', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT bs.*, u.email AS owner_email
+    `SELECT bs.*, bb.name AS bucket_name
      FROM backlog_shares bs
-     JOIN users u ON u.id = bs.owner_user_id
+     JOIN backlog_buckets bb ON bb.id = bs.bucket_id
      WHERE bs.owner_workspace_id = $1
-     ORDER BY bs.created_at DESC`,
+     ORDER BY bb.name, bs.created_at DESC`,
     [req.auth!.workspaceId],
   );
   res.json(rows);
@@ -242,39 +260,32 @@ backlogRouter.get('/', async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/backlog  — add to own backlog OR to a shared backlog
-// If shared_workspace_id is provided, adds to that workspace's backlog (must have accepted share)
+// POST /api/backlog  — add to own backlog OR to a shared bucket
 backlogRouter.post('/', async (req, res) => {
-  const { title, description, category, effort, bucket_id, shared_workspace_id } = req.body;
+  const { title, description, category, effort, bucket_id, shared_bucket_id } = req.body;
   if (!title?.trim()) { res.status(400).json({ error: 'title required' }); return; }
 
   let targetWorkspaceId = req.auth!.workspaceId;
+  let targetBucketId    = bucket_id ?? null;
 
-  if (shared_workspace_id) {
-    // Verify current user has accepted access to this shared workspace's backlog
+  if (shared_bucket_id) {
+    // Verify current user has accepted access to this shared bucket
     const { rows: [share] } = await pool.query(
-      `SELECT id FROM backlog_shares
-       WHERE owner_workspace_id = $1
-         AND invitee_workspace_id = $2
-         AND status = 'accepted'`,
-      [shared_workspace_id, req.auth!.workspaceId],
+      `SELECT bs.owner_workspace_id FROM backlog_shares bs
+       WHERE bs.bucket_id = $1
+         AND bs.invitee_workspace_id = $2
+         AND bs.status = 'accepted'`,
+      [shared_bucket_id, req.auth!.workspaceId],
     );
-    if (!share) { res.status(403).json({ error: 'No access to this backlog' }); return; }
-    targetWorkspaceId = shared_workspace_id;
+    if (!share) { res.status(403).json({ error: 'No access to this bucket' }); return; }
+    targetWorkspaceId = share.owner_workspace_id;
+    targetBucketId    = shared_bucket_id;
   }
 
   const { rows: [item] } = await pool.query(
     `INSERT INTO backlog_items (workspace_id, owner_id, bucket_id, title, description, category, effort)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [
-      targetWorkspaceId,
-      req.auth!.userId,
-      bucket_id ?? null,
-      title.trim(),
-      description ?? null,
-      category ?? 'personal',
-      effort ?? null,
-    ],
+    [targetWorkspaceId, req.auth!.userId, targetBucketId, title.trim(), description ?? null, category ?? 'personal', effort ?? null],
   );
   res.status(201).json(item);
 });
