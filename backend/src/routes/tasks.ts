@@ -73,7 +73,7 @@ tasksRouter.post('/', async (req, res) => {
 
 // PATCH /api/tasks/:id
 tasksRouter.patch('/:id', async (req, res) => {
-  const allowed = ['title', 'description', 'effort', 'duration_days', 'start_date', 'deadline', 'is_locked', 'progress_pct', 'status', 'category'];
+  const allowed = ['title', 'description', 'effort', 'duration_days', 'start_date', 'deadline', 'is_locked', 'progress_pct', 'status', 'category', 'phase_id'];
   const entries = Object.entries(req.body).filter(([k]) => allowed.includes(k));
 
   // Recompute end_date if start_date or duration_days changes

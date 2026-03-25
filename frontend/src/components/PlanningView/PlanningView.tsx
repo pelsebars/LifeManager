@@ -128,16 +128,26 @@ export function PlanningView() {
       />
 
       {/* Task detail panel (edit) */}
-      {selectedTask && (
-        <TaskDetailPanel
-          task={selectedTask}
-          phaseRef={phaseRef}
-          taskOptionGroups={taskOptionGroups}
-          onSave={(id, patch) => { updateTask(id, patch); setSelectedTask(null); }}
-          onDelete={(id) => { deleteTask(id, findPhaseId(id)); setSelectedTask(null); }}
-          onClose={() => setSelectedTask(null)}
-        />
-      )}
+      {selectedTask && (() => {
+        // Find project that owns this task, then get all its phases
+        const ownerPhaseId = findPhaseId(selectedTask.id);
+        const ownerProjectId = Object.entries(phases).find(([, phs]) =>
+          phs.some((ph) => ph.id === ownerPhaseId)
+        )?.[0] ?? '';
+        const allPhasesForProject = (phases[ownerProjectId] ?? [])
+          .slice().sort((a, b) => a.order - b.order);
+        return (
+          <TaskDetailPanel
+            task={selectedTask}
+            phaseRef={phaseRef}
+            phases={allPhasesForProject}
+            taskOptionGroups={taskOptionGroups}
+            onSave={(id, patch) => { updateTask(id, patch); setSelectedTask(null); }}
+            onDelete={(id) => { deleteTask(id, findPhaseId(id)); setSelectedTask(null); }}
+            onClose={() => setSelectedTask(null)}
+          />
+        );
+      })()}
 
       {/* Create task panel */}
       {addingToProjectId && (() => {

@@ -40,7 +40,7 @@ interface EditProps {
   mode?: 'edit';
   task: Task;
   phaseRef: string;
-  phases?: never;
+  phases: Phase[];
   taskOptionGroups?: TaskOptionGroup[];
   onSave: (id: string, patch: Partial<Task>) => void;
   onCreate?: never;
@@ -71,7 +71,7 @@ export function TaskDetailPanel(props: Props) {
   // Form state
   const prefill = isCreate ? (props as CreateProps).prefill : undefined;
   const [title, setTitle]         = useState(isCreate ? (prefill?.title ?? '') : props.task.title);
-  const [phaseId, setPhaseId]     = useState(isCreate ? (props.phases[props.phases.length - 1]?.id ?? '') : '');
+  const [phaseId, setPhaseId]     = useState(isCreate ? (props.phases[props.phases.length - 1]?.id ?? '') : props.task.phase_id);
   const [startDate, setStartDate] = useState(isCreate ? today : '');
   const [effort, setEffort]       = useState(isCreate ? String(prefill?.effort ?? 1) : String(props.task.effort));
   const [duration, setDuration]   = useState(isCreate ? '1' : String(props.task.duration_days));
@@ -97,6 +97,7 @@ export function TaskDetailPanel(props: Props) {
     setIsLocked(t.is_locked);
     setCategory(t.category ?? 'personal');
     setDeps(t.dependencies ?? []);
+    setPhaseId(t.phase_id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCreate ? null : props.task?.id]);
 
@@ -132,7 +133,7 @@ export function TaskDetailPanel(props: Props) {
         dependencies:  deps,
       });
     } else {
-      props.onSave(props.task.id, {
+      const patch: Partial<Task> = {
         title:         title.trim() || props.task.title,
         category,
         effort:        effortVal,
@@ -142,7 +143,9 @@ export function TaskDetailPanel(props: Props) {
         status,
         is_locked:     isLocked,
         dependencies:  deps,
-      });
+      };
+      if (phaseId !== props.task.phase_id) patch.phase_id = phaseId;
+      props.onSave(props.task.id, patch);
     }
   };
 
@@ -198,23 +201,21 @@ export function TaskDetailPanel(props: Props) {
         {/* Form body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Phase selector — create mode only */}
-          {isCreate && (
-            props.phases.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', borderRadius: 5, padding: '8px 10px', border: '1px solid #f59e0b' }}>
-                No phases yet. Use <strong>+ → Add Phase</strong> to create one first.
-              </div>
-            ) : (
-              <label style={labelStyle}>
-                Phase
-                <select value={phaseId} onChange={(e) => setPhaseId(e.target.value)} style={inputStyle}>
-                  {props.phases.map((ph) => (
-                    <option key={ph.id} value={ph.id}>{ph.order}. {ph.title}</option>
-                  ))}
-                </select>
-              </label>
-            )
-          )}
+          {/* Phase selector — create and edit mode */}
+          {props.phases.length === 0 && isCreate ? (
+            <div style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', borderRadius: 5, padding: '8px 10px', border: '1px solid #f59e0b' }}>
+              No phases yet. Use <strong>+ → Add Phase</strong> to create one first.
+            </div>
+          ) : props.phases.length > 0 ? (
+            <label style={labelStyle}>
+              Phase
+              <select value={phaseId} onChange={(e) => setPhaseId(e.target.value)} style={inputStyle}>
+                {props.phases.map((ph) => (
+                  <option key={ph.id} value={ph.id}>{ph.order}. {ph.title}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           {/* Title */}
           <label style={labelStyle}>

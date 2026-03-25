@@ -312,6 +312,31 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   // ── BL-20: persist changes via schedule/apply, apply cascade ─────────────
   updateTask: (id, patch) => {
+    // Phase move: handle separately (no scheduling cascade, just a bucket move)
+    if ('phase_id' in patch && patch.phase_id) {
+      const newPhaseId = patch.phase_id as string;
+      set((s) => {
+        const newTasks = { ...s.tasks };
+        let movedTask: Task | undefined;
+        // Remove from old phase
+        for (const phId of Object.keys(newTasks)) {
+          const idx = newTasks[phId].findIndex((t) => t.id === id);
+          if (idx !== -1) {
+            movedTask = { ...newTasks[phId][idx], ...patch };
+            newTasks[phId] = newTasks[phId].filter((t) => t.id !== id);
+            break;
+          }
+        }
+        // Insert into new phase
+        if (movedTask) {
+          newTasks[newPhaseId] = [...(newTasks[newPhaseId] ?? []), movedTask];
+        }
+        return { tasks: newTasks };
+      });
+      api.tasks.update(id, patch).catch(() => {});
+      return;
+    }
+
     // 1. Optimistic local update — keeps drag interactions snappy
     set((s) => {
       const newTasks = { ...s.tasks };
