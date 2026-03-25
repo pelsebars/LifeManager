@@ -138,6 +138,9 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
   const [showWork,     setShowWork]     = useState(true);
   const [showPersonal, setShowPersonal] = useState(true);
 
+  // Stale filter — show only tasks not touched for more than N days (0 = disabled)
+  const [staleDays, setStaleDays] = useState<string>('');
+
   // BL-34: popup menu — tracks which project's "+" is open + the button's screen position
   const [addMenuProjectId, setAddMenuProjectId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -253,7 +256,13 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
             .slice().sort((a: Task, b: Task) => a.start_date.localeCompare(b.start_date))
             .filter((t: Task) => {
               const cat = t.category ?? 'personal';
-              return (cat === 'work' && showWork) || (cat === 'personal' && showPersonal);
+              if (!((cat === 'work' && showWork) || (cat === 'personal' && showPersonal))) return false;
+              const staleThreshold = parseInt(staleDays, 10);
+              if (staleThreshold > 0 && t.updated_at) {
+                const daysSinceUpdate = (Date.now() - new Date(t.updated_at).getTime()) / 86_400_000;
+                if (daysSinceUpdate <= staleThreshold) return false;
+              }
+              return true;
             });
 
           let firstTaskInPhase = true;
@@ -726,6 +735,30 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
           <span style={{ opacity: checked ? 1 : 0.4 }}>{label}</span>
         </label>
       ))}
+
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#aaa', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Stale &gt;</span>
+        <input
+          type="number"
+          min={0}
+          placeholder="days"
+          value={staleDays}
+          onChange={(e) => setStaleDays(e.target.value)}
+          style={{
+            width: 56, padding: '2px 6px', borderRadius: 4,
+            border: `1px solid ${staleDays ? '#f59e0b' : '#ddd'}`,
+            fontSize: 12, color: '#333', outline: 'none',
+            background: staleDays ? '#fffbeb' : 'white',
+          }}
+        />
+        <span style={{ fontSize: 11, color: '#aaa' }}>days</span>
+        {staleDays && (
+          <button
+            onClick={() => setStaleDays('')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#aaa', lineHeight: 1, padding: '0 2px' }}
+          >×</button>
+        )}
+      </div>
     </div>
     <div ref={containerRef} style={{ position: 'relative', height: HEADER_HEIGHT + groups.length * LINE_HEIGHT, overflow: 'hidden' }}>
       {/* BL-30: suppress react-calendar-timeline's selected-item highlight (red outline) and today-line */}
