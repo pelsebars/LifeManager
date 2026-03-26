@@ -39,6 +39,19 @@ function getDayType(dateStr: string): 'workday' | 'weekend' {
 
 type Band = 'work' | 'personal';
 
+/** Count working days (Mon–Fri) between two YYYY-MM-DD dates (inclusive). */
+function countWeekdays(start: string, end: string): number {
+  let count = 0;
+  const cur = moment(start);
+  const last = moment(end);
+  while (cur.isSameOrBefore(last, 'day')) {
+    const dow = cur.day();
+    if (dow !== 0 && dow !== 6) count++;
+    cur.add(1, 'day');
+  }
+  return count;
+}
+
 function computeLoad(tasks: Task[], days: string[], profiles: DayProfile[], band: Band, routines: Routine[]): LoadEntry[] {
   const profileMap: Record<string, number> = {};
   for (const p of profiles) {
@@ -53,13 +66,23 @@ function computeLoad(tasks: Task[], days: string[], profiles: DayProfile[], band
 
   return days.map((date) => {
     const dayType   = getDayType(date);
-    const available = profileMap[dayType] ?? (band === 'work' ? 8 : 3);
+    const isWeekend = dayType === 'weekend';
 
-    const planned = bandTasks
+    // Work band has zero capacity on weekends
+    const available = (band === 'work' && isWeekend)
+      ? 0
+      : (profileMap[dayType] ?? (band === 'work' ? 8 : 3));
+
+    // Work tasks skip weekends: effort is spread over weekdays only.
+    const planned = (band === 'work' && isWeekend) ? 0 : bandTasks
       .filter((t) => t.status !== 'completed' && t.status !== 'deferred')
       .filter((t) => date >= t.start_date.slice(0, 10) && date <= t.end_date.slice(0, 10))
       .reduce((sum, t) => {
         const remaining = Number(t.effort) * (1 - t.progress_pct / 100);
+        if (band === 'work') {
+          const wd = countWeekdays(t.start_date.slice(0, 10), t.end_date.slice(0, 10));
+          return sum + (wd > 0 ? remaining / wd : 0);
+        }
         return sum + remaining / t.duration_days;
       }, 0);
 
