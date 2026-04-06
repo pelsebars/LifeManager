@@ -109,6 +109,17 @@ scheduleRouter.post('/apply', async (req, res) => {
       );
     }
 
+    // 2b. Update dependencies (junction table) if included in patch
+    if ('dependencies' in patch && Array.isArray(patch.dependencies)) {
+      await client.query('DELETE FROM task_dependencies WHERE task_id = $1', [taskId]);
+      for (const depId of patch.dependencies as string[]) {
+        await client.query(
+          'INSERT INTO task_dependencies (task_id, depends_on_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [taskId, depId],
+        );
+      }
+    }
+
     // 3. Fetch all active workspace tasks for cascade computation
     const { rows: allRows } = await client.query<Task & { dependencies: string[] }>(
       `SELECT t.id, t.start_date, t.end_date, t.duration_days,

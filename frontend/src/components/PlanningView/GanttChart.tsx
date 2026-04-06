@@ -321,7 +321,7 @@ export function GanttChart({ onVisibleTimeChange, onAddTask, onAddPhase, onEditP
     }
 
     return { groups, items, taskById, groupIndexById, phaseRefMap, phaseFirstRowIndex, dependentsOf, arrows };
-  }, [projects, phases, tasks, expandedProjects, toggleProject, addMenuProjectId, showWork, showPersonal, routines]);
+  }, [projects, phases, tasks, expandedProjects, toggleProject, addMenuProjectId, showWork, showPersonal, routines, staleDays]);
 
   // ── BL-14: move/resize validator ──────────────────────────────────────────
   const moveResizeValidator = useCallback(
