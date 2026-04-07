@@ -85,16 +85,63 @@ tasksRouter.patch('/:id', async (req, res) => {
     updates.end_date = computeEndDate(start, dur);
   }
 
-  const finalEntries = Object.entries(updates);
-  if (!finalEntries.length) { res.status(400).json({ error: 'No valid fields' }); return; }
-  const sets = finalEntries.map(([k], i) => `${k} = $${i + 2}`).join(', ');
-  const vals = finalEntries.map(([, v]) => v);
-  const { rows } = await pool.query(
-    `UPDATE tasks SET ${sets} WHERE id = $1 RETURNING *`,
-    [req.params.id, ...vals]
-  );
-  if (!rows[0]) { res.status(404).json({ error: 'Not found' }); return; }
-  res.json(rows[0]);
+  const dependencies: string[] | undefined = Array.isArray(req.body.dependencies) ? req.body.dependencies : undefined;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Update task fields (if any)
+    let task: Record<string, unknown>;
+    const finalEntries = Object.entries(updates);
+    if (finalEntries.length > 0) {
+      const sets = finalEntries.map(([k], i) => `${k} = $${i + 2}`).join(', ');
+      const vals = finalEntries.map(([, v]) => v);
+      const { rows } = await client.query(
+        `UPDATE tasks SET ${sets} WHERE id = $1 RETURNING *`,
+        [req.params.id, ...vals]
+      );
+      if (!rows[0]) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      task = rows[0];
+    } else {
+      const { rows } = await client.query('SELECT * FROM tasks WHERE id = $1', [req.params.id]);
+      if (!rows[0]) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      task = rows[0];
+    }
+
+    // Update dependencies junction table if provided
+    if (dependencies !== undefined) {
+      await client.query('DELETE FROM task_dependencies WHERE task_id = $1', [req.params.id]);
+      for (const depId of dependencies) {
+        await client.query(
+          'INSERT INTO task_dependencies (task_id, depends_on_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [req.params.id, depId]
+        );
+      }
+    }
+
+    // Fetch final dependencies for the response
+    const { rows: depRows } = await client.query(
+      'SELECT depends_on_id FROM task_dependencies WHERE task_id = $1',
+      [req.params.id]
+    );
+    await client.query('COMMIT');
+
+    res.json({ ...task, dependencies: depRows.map((r) => r.depends_on_id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to update task' });
+  } finally {
+    client.release();
+  }
 });
 
 // DELETE /api/tasks/:id
