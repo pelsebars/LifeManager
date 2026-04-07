@@ -100,7 +100,7 @@ export function PlanningView() {
   })();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '1rem', gap: '0.75rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '1rem 1rem 1.5rem', gap: '0.75rem' }}>
 
       {loading && <span style={{ fontSize: 12, color: '#888' }}>Loading…</span>}
 
